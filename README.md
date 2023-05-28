@@ -1,2 +1,2 @@
-# RIR-pycessing
-Room impulse response Python processing software development
+# RIR-processing
+Room impulse response Python processing software development.
