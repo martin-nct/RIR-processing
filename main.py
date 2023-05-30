@@ -23,11 +23,47 @@ class Room_IR():
         
         self.sweep, self.fs = sf.read(file)
         
-    def get_bandas_validez(self, filtro):
+    def IR_from_ss(self, f0, f1, T, fs):
+
+        l = len(self.rec) # Lenght of the IR
+
+        # Generate logarithmic sine sweep
+        t = np.linspace(start=0, stop=T, num=int(T * fs), endpoint=False)   # Time vector
+        sine_sweep = signal.chirp(t=t, f0=f0, f1=f1, t1=T, method="logarithmic") # Sine sweep
+        self.sweep = sine_sweep
+        self.fs = fs
         
-        # self.freq = np.fft.rfftfreq(self.sweep.size, 1/self.fs)
-        # self.espectro_sw = np.abs(np.fft.rfft(self.sweep))
-        # self.espectro_sw /= max(self.espectro_sw)
+        # Based on: "Simultaneous Measurement of Impulse Response and Distortion With a Swept-Sine Technique by A. Farina"
+        M = 1/(2 * np.pi * np.exp(t * np.log(f1 / f0) / T)) # Modulation factor
+        inv_filt = M * sine_sweep[::-1] # Inverse filter for sine sweep
+        inv_filt /= max(abs(inv_filt))  # Normalize
+        inv_filt = np.pad(array=inv_filt, pad_width=(0, int(l - T * fs)), mode="constant") # Zero padding
+        
+        # Processing in frequency domain
+        signal_fft = np.fft.rfft(self.IR)
+        inv_filt_fft = np.fft.rfft(inv_filt)
+        
+        IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
+        IR = np.fft.ifft(IR_fft)           # Inverse FFT to recover the temporary IR
+        self.IR = IR / np.max(np.abs(IR))
+        
+        # Pase a decibeles
+        self.IR_dB = funciones.a_dBFS(self.IR)
+        
+        # Se encuentra el inicio del impulso y se descartan las muestras
+        # anteriores
+        Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
+        T_end = 5 # segundos
+        Nend = int(T_end * self.fs)
+
+        self.IR = self.IR[Nstart:Nstart+Nend]
+        
+        # Filtra la señal entre las frecuencias extremo del sweep
+        self.IR = funciones.filtro_pasabanda(self.IR, f0, f1, self.fs)
+        
+        # return self.IR, self.fs
+        
+    def get_bandas_validez(self, filtro):
         
         self.freq, self.espectro_sw = funciones.espectro(self.sweep, self.fs, dB=False)
         
@@ -150,14 +186,11 @@ class Room_IR():
         # Se encuentra el inicio del impulso y se descartan las muestras
         # anteriores
         Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
-        T_end = 10 # segundos
+        T_end = 5 # segundos
         Nend = int(T_end * self.fs)
         
         self.IR = self.IR[Nstart:Nstart+Nend]
         
-        # Filtra la señal entre las frecuencias extremo del sweep
-        # self.IR = funciones.filtro_pasabanda(self.IR, self.fstart, 
-                                              # self.fend, self.fs)
     
     def smooth_energyc(self, IR, M=None, mode=1):
         

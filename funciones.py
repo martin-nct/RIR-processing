@@ -966,54 +966,59 @@ def a_dB(x):
 # =============================================================================
 
 ## RT
-def calc_RT20(filtered_IR, fs):
-    # RT20 = 3 * (np.max(np.where(filtered_IR > -25)) - np.max(np.where(filtered_IR > -5))) / fs   # Calculate the RT20
-    t = np.arange(0, len(filtered_IR)/fs, 1/fs)
-    maxval = np.max(filtered_IR)
-    i_start = int(np.argwhere(filtered_IR >= maxval -5)[-1])
-    i_end = int(np.argwhere(filtered_IR >= maxval -25)[-1])
-    p = cuad_min(t[i_start:i_end], filtered_IR[i_start:i_end])
+def calc_RT20(smoothed_IR, fs):
+    # RT20 = 3 * (np.max(np.where(smoothed_IR > -25)) - np.max(np.where(smoothed_IR > -5))) / fs   # Calculate the RT20
+    t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
+    maxval = np.max(smoothed_IR)
+    i_start = int(np.argwhere(smoothed_IR >= maxval -5)[-1])
+    i_end = int(np.argwhere(smoothed_IR >= maxval -25)[-1])
+    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
     
     return round(-60 / p[0], 3)
 
-def calc_RT30(filtered_IR, fs):
-    # RT30 = 2 * (np.max(np.where(filtered_IR > -35)) - np.max(np.where(filtered_IR > -5))) / fs   # Calculate the RT30
-    t = np.arange(0, len(filtered_IR)/fs, 1/fs)
-    maxval = np.max(filtered_IR)
-    i_start = int(np.argwhere(filtered_IR >= maxval -5)[-1])
-    i_end = int(np.argwhere(filtered_IR >= maxval -35)[-1])
-    p = cuad_min(t[i_start:i_end], filtered_IR[i_start:i_end])
+def calc_RT30(smoothed_IR, fs):
+    # RT30 = 2 * (np.max(np.where(smoothed_IR > -35)) - np.max(np.where(smoothed_IR > -5))) / fs   # Calculate the RT30
+    t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
+    maxval = np.max(smoothed_IR)
+    i_start = int(np.argwhere(smoothed_IR >= maxval -5)[-1])
+    i_end = int(np.argwhere(smoothed_IR >= maxval -35)[-1])
+    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
     
     return round(-60 / p[0], 3)
     
 
-def calc_EDT(filtered_IR, fs):
-    t = np.arange(0, len(filtered_IR)/fs, 1/fs)
-    maxval = np.max(filtered_IR)
-    i_start = int(np.argwhere(filtered_IR >= maxval -1)[-1])
-    i_end = int(np.argwhere(filtered_IR >= maxval -10)[-1])
-    p = cuad_min(t[i_start:i_end], filtered_IR[i_start:i_end])
+def calc_EDT(smoothed_IR, fs):
+    t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
+    maxval = np.max(smoothed_IR)
+    i_start = int(np.argwhere(smoothed_IR >= maxval -1)[-1])
+    i_end = int(np.argwhere(smoothed_IR >= maxval -10)[-1])
+    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
 
     return round(-60 / p[0], 3)
     
     
 ## Clarity
 
-def calc_C50(filtered_IR, fs):
+def calc_C50(smoothed_IR, fs):
     N50 = int(.05 * fs)
-    C50 = 10 * np.log10(np.sum(filtered_IR[:N50])  / np.sum(filtered_IR[N50:])) # Calculate the C50
+    C50 = 10 * np.log10(np.sum(smoothed_IR[:N50])  / np.sum(smoothed_IR[N50:])) # Calculate the C50
         
     return round(C50, 3)
 
-def calc_C80(filtered_IR, fs):
+def calc_C80(smoothed_IR, fs):
     N80 = int(.08 * fs)
-    C80 = 10 * np.log10(np.sum(filtered_IR[:N80])  / np.sum(filtered_IR[N80:])) # Calculate the C80
+    C80 = 10 * np.log10(np.sum(smoothed_IR[:N80])  / np.sum(smoothed_IR[N80:])) # Calculate the C80
     
     return round(C80, 3)
 
 ## Tt & EDTt
 
 def calc_Tt(filtered_IR, fs):
-    Tt = np.max(np.where(np.cumsum(filtered_IR) <= 0.99 * np.max(np.sum(filtered_IR))))   
+    # Tt = np.max(np.where(np.cumsum(filtered_IR) <= 0.99 * np.max(np.sum(filtered_IR))))
+    Tt = np.argmax(np.cumsum(filtered_IR) <= 0.99 * np.sum(filtered_IR)) / fs
     
-    return round(Tt/fs, 3)
+    # EDTt_min = np.argwhere(filtered_IR > -1)[-1]
+    # EDTt_max = Tt.copy()
+    # EDTt = 
+    
+    return round(Tt, 3)

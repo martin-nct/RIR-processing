@@ -26,39 +26,41 @@ class SetUpWindow(QWidget, Room_IR):
         # Imports:
         importBox = QGroupBox('Import')
         
-        loadSweep = QPushButton('Load Sweep')
-        loadSweep.clicked.connect(self.load_sweep)
+        self.loadSweep = QPushButton('Load Sweep')
+        self.loadSweep.clicked.connect(self.load_sweep)
         loadRec = QPushButton('Load Record')
         loadRec.clicked.connect(self.load_recording)
         
         box0 = QVBoxLayout()
-        box0.addWidget(loadSweep)
+        box0.addWidget(self.loadSweep)
         box0.addWidget(loadRec)
         importBox.setLayout(box0)
         
         #Generate Sweep 
-        generateBox = QGroupBox('Generate Sweep')
+        self.generateBox = QGroupBox('Generate Sweep')
+        self.generateBox.setCheckable(True)
+        self.generateBox.setChecked(False)
         
         labelfmin = QLabel('Sart Freq')
         labelfmax = QLabel('End Freq')
         labeltime = QLabel('Time')
         labelfs = QLabel('Sample Rate')
         
-        fmin = QLineEdit()
-        fmax = QLineEdit()
-        time = QLineEdit()
-        fs = QLineEdit()
+        self.fmin = QLineEdit()
+        self.fmax = QLineEdit()
+        self.time = QLineEdit()
+        self.fs = QLineEdit()
         
         box1 = QGridLayout()
         box1.addWidget(labelfmin, 0, 0, 1, 1)
-        box1.addWidget(fmin, 0, 1, 1, 1)
+        box1.addWidget(self.fmin, 0, 1, 1, 1)
         box1.addWidget(labelfmax, 0, 2, 1, 1)
-        box1.addWidget(fmax, 0, 3, 1, 1)
+        box1.addWidget(self.fmax, 0, 3, 1, 1)
         box1.addWidget(labeltime, 1, 0, 1, 1)
-        box1.addWidget(time, 1, 1, 1, 1)
+        box1.addWidget(self.time, 1, 1, 1, 1)
         box1.addWidget(labelfs, 1, 2, 1, 1)
-        box1.addWidget(fs, 1, 3, 1, 1)
-        generateBox.setLayout(box1)
+        box1.addWidget(self.fs, 1, 3, 1, 1)
+        self.generateBox.setLayout(box1)
         
         # Filter Box
         filterBox = QGroupBox('Filter settings')
@@ -107,7 +109,7 @@ class SetUpWindow(QWidget, Room_IR):
         # Main Layout
         mainBox = QGridLayout(self)
         mainBox.addWidget(importBox, 0, 0, 1, 1)
-        mainBox.addWidget(generateBox, 0, 1, 1, 1)
+        mainBox.addWidget(self.generateBox, 0, 1, 1, 1)
         mainBox.addWidget(filterBox, 1, 0, 1, 1)
         mainBox.addWidget(smoothBox, 1, 1, 1, 1)
         mainBox.addWidget(setBox, 2, 0, 1, 1)
@@ -135,32 +137,24 @@ class SetUpWindow(QWidget, Room_IR):
         #     reverse = 1
         # else: reverse = 0
         
-        # f_validas = self.get_bandas_validez(filtro)
-        self.get_inverse_filt()
-        self.linear_convolve()
+        if self.generateBox.isChecked():
+            self.IR_from_ss(self.fmin, self.fmax, self.time, self.fs)
+            self.loadSweep.setFlat()
+       
+        else:
+            self.get_inverse_filt()
+            self.linear_convolve()
+
+        self.get_bandas_validez(filtro)
+            
         ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro, method)
         
         self.results, self.schroeder, self.mmfilt = self.get_acparam(ETC, method)
         
         self.ResultW = ResultWindow(self.results, self.schroeder, 
-                                    self.mmfilt, self.fs, filtro)
+                                    self.mmfilt, self.fs, filtro, self.f_validas)
         self.ResultW.show()
         self.hide()
-        
-        # self.ResultW.config_table(self.results, filtro)
-        
-        # # Grafico
-        # t = np.arange(0, self.mmfilt[0].size/self.fs, 1/self.fs)
-        # if self.schroeder is not None:
-        #     self.ResultW.linea_ETC.set_xdata(self.schroeder[5].size)
-        #     self.ResultW.linea_ETC.set_ydata(t[:self.schroeder[5].size])
-        
-        # self.ResultW.linea_EDC.set_xdata(t)
-        # self.ResultW.linea_EDC.set_ydata(self.mmfilt[5])
-        # self.ResultW.linea_EDC.axes.set_xlim(t[0], t[-1])
-        # self.ResultW.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
-        
-        # self.ResultW.linea_ETC.figure.canvas.draw()
         
     def load_sweep(self):
         filtro = 'WAV (*wav);;FLAC (*flac)'
@@ -175,7 +169,7 @@ class SetUpWindow(QWidget, Room_IR):
             self.rec, self.fs_rec = sf.read(ruta)
 
 class ResultWindow(QWidget):
-    def __init__(self, results, schroeder, mmfilt, fs, filtro):
+    def __init__(self, results, schroeder, mmfilt, fs, filtro, f_validas):
         super().__init__(windowTitle = 'Room Impulse Response')
         
         self.results = results
@@ -183,6 +177,7 @@ class ResultWindow(QWidget):
         self.mmfilt = mmfilt
         self.fs = fs
         self.filtro = filtro
+        self.f_validas = f_validas
         # Gráfico
         
         self.t = np.arange(0, self.mmfilt[0].size/self.fs, 1/self.fs)
@@ -230,6 +225,15 @@ class ResultWindow(QWidget):
         
     def config_table(self, data, filtro):
         
+        if filtro == 0:
+            center = funciones.octavas()
+        elif filtro == 1:
+            center = funciones.tercios()
+        
+        for i in self.f_validas:
+            if i in center:
+                print(i)
+        
         numcols = len(data)
         numrows = len(data[0])
         self.tableWidget.setColumnCount(numcols)
@@ -267,9 +271,25 @@ class ResultWindow(QWidget):
         ruta = QFileDialog.getSaveFileName(directory='data.csv', 
                                            filter='*csv')[0]
         if ruta != '':
-            data = ['Freq [Hz]']
-            data.append(funciones.labels_bandas(self.filtro))
-        
+            
+            numcols = len(self.results)
+            numrows = len(self.results[0])
+    
+            data = np.zeros((numrows+1, numcols+1), dtype='<U9')
+    
+            data[0, 0] = 'Freq [Hz]'
+            data[0, 1:] = funciones.labels_bandas(self.filtro)
+    
+            for row in range(numrows):
+                # row += 1
+                for column in range(numcols+1):
+                    if column == 0:
+                        data[row+1, column] = (list(self.results[0].keys())[row])
+                    else:
+                        data[row+1, column] = (list(self.results[column-1].values())[row])
+    
+            np.savetxt(ruta, data, fmt='%s', delimiter=',')
+
         
         
 app = QApplication([])
