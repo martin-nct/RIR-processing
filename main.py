@@ -8,7 +8,6 @@ Created on Mon Apr 24 12:36:57 2023
 import numpy as np
 import scipy.signal as signal
 from scipy.ndimage import median_filter
-import matplotlib.pyplot as plt
 import soundfile as sf
 import funciones
 
@@ -40,11 +39,11 @@ class Room_IR():
         inv_filt = np.pad(array=inv_filt, pad_width=(0, int(l - T * fs)), mode="constant") # Zero padding
         
         # Processing in frequency domain
-        signal_fft = np.fft.rfft(self.IR)
+        signal_fft = np.fft.rfft(self.rec)
         inv_filt_fft = np.fft.rfft(inv_filt)
         
         IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
-        IR = np.fft.ifft(IR_fft)           # Inverse FFT to recover the temporary IR
+        IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
         self.IR = IR / np.max(np.abs(IR))
         
         # Pase a decibeles
@@ -92,7 +91,9 @@ class Room_IR():
                         self.f_validas.append(f_c[i])
                     elif (octava == 3) and (nivel_x_banda[i] >= (nivel_x_banda[i-1] - 1.5)):
                         self.f_validas.append(f_c[i])
-
+            
+        while self.fstart > self.f_validas[0]:
+            self.f_validas.pop(0)
 
     def get_inverse_filt(self):
         
@@ -163,7 +164,7 @@ class Room_IR():
             
             # Se encuentra el inicio del impulso y se descartan las muestras
             # anteriores
-            Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
+            Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
             if T_end is None:
                 T_end = 5 # segundos
             Nend = int(T_end * self.fs)
@@ -185,14 +186,14 @@ class Room_IR():
         
         # Se encuentra el inicio del impulso y se descartan las muestras
         # anteriores
-        Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
+        Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
         T_end = 5 # segundos
         Nend = int(T_end * self.fs)
         
         self.IR = self.IR[Nstart:Nstart+Nend]
         
     
-    def smooth_energyc(self, IR, M=None, mode=1):
+    def smooth_energyc(self, IR, M=2400, mode=1):
         
         IR_filt = abs(signal.hilbert(IR))  # Módulo de la transformada de Hilbert
         
@@ -281,20 +282,29 @@ class Room_IR():
             
             delta = abs(t[i_c3] - t[i_c2])
             i_c2 = i_c3
-            slope = p2[0]
             it +=1
-        return slope, i_c2
+            
+        C = max(self.IR) * 10 ** (p[1] / 10) * np.exp(p[0]/10/np.log10(np.exp(1))*i_c2) / (
+            -p[0] / 10 / np.log10(np.exp(1)))
+        
+        return C, i_c2
 
-    def schroeder_int(self, IR, N_c):
+    def schroeder_int(self, IR, N_c, C):
         '''
         Obtiene la curva de decaimiento energético mediante la integral 
         de Schroeder.
 
         Parameters
         ----------
+        IR : 1d-array
+            Respuesta al impulso del recinto.
+        
         N_c : int
             Índice del punto de cruce.
-
+        
+        C : float
+            Compensación de ruido de Lundeby.
+        
         Returns
         -------
         array
@@ -302,23 +312,30 @@ class Room_IR():
 
         '''
         IR = IR ** 2
-        sch = np.cumsum(IR[N_c::-1])
-        sch /= np.max(sch)
+        sch = np.cumsum(IR[N_c::-1] + C)
+        sch /= (np.max(sch) + C)
         return 10 * np.log10(sch[::-1])
     
-    def get_ETC(self, impfilt, fs, method):
+    def get_ETC(self, impfilt, fs, frec):
         
-        Ec = self.smooth_energyc(impfilt)
+        if frec <= 40: 
+            M = int(self.fs / 20)
+        elif frec >= 8000:
+            M = int(self.fs / 4000)
+        else:
+            M = 2 * int(self.fs / frec) # Ventana igual a 2 períodos de la frecuencia central
         
-        if method == 0:
-            _, N_c = self.crosspoint_lundeby(Ec)
-            
-            return self.schroeder_int(impfilt, N_c), Ec
+        Ec = self.smooth_energyc(impfilt, M)
         
-        if method == 1:
+        if self.method == 0:
+            C, N_c = self.crosspoint_lundeby(Ec)
+            if not self.comp: C = 0
+            return self.schroeder_int(impfilt, N_c, C), Ec
+        
+        if self.method == 1:
             return Ec
     
-    def calcula_ETC(self, param, imp, fs, filtro=0, method=0, N=5, reverse=0):
+    def calcula_ETC(self, param, imp, fs, filtro=0, N=5, reverse=0):
         '''
         Calcula el parámetro 'param' para una señal por octavas o tercios
         de octava.
@@ -353,7 +370,7 @@ class Room_IR():
                 impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
-                salida.append(param(impfilt, fs, method))
+                salida.append(param(impfilt, fs, frecs[i]))
             return salida
         elif filtro == 0 :  # octavas
             salida = []
@@ -364,7 +381,7 @@ class Room_IR():
                 impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
-                salida.append(param(impfilt, fs, method))
+                salida.append(param(impfilt, fs, frecs[i]))
             return salida
         
     def acoustical_parameters (self, filtered_IR):
@@ -390,13 +407,13 @@ class Room_IR():
           # d["EDTt"] = ""
           return d
           
-    def get_acparam(self, ETC, method=0):
+    def get_acparam(self, ETC):
         
         results = []
+        mmfilt = []
         
-        if method == 0:
+        if self.method == 0:
             schr = []
-            mmfilt = []
             for i in range(len(ETC)):
                 schr.append(ETC[i][0])
                 mmfilt.append(ETC[i][1])
@@ -405,9 +422,10 @@ class Room_IR():
             for i in range(len(schr)):
                 results.append(self.acoustical_parameters(schr[i]))  
         
-        elif method == 1:
+        elif self.method == 1:
             for i in range(len(ETC)):
                 results.append(self.acoustical_parameters(ETC[i]))
             schr = None
+            mmfilt = ETC
         
         return results, schr, mmfilt

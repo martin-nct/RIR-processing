@@ -97,15 +97,16 @@ def ticks_bandas(tipo='tercios', paso=3):
 def labels_bandas(filtro=0, Hz = False):
     
     if filtro == 0: # Filtro de octavas
-        center = ['31.5', '63', '125', '250', '500', '1k', '2k', '4k', '8k', '16k']
+        center = ['31.5', '63', '125', '250', '500', '1 k', '2 k', '4 k', '8 k', '16 k']
     if filtro == 1: # Filtro de tercios de octava
-        center = ['25', '31.5', '40', '50', '63', '80', '100', '125', '160', '200', '250', '315',
-                              '400', '500', '630', '800', '1k', '1.25k', '1.6k', '2k', '2.5k', '3.15k',
-                              '4k', '5k', '6.3k', '8k', '10k', '12.5k', '16k', '20k']
+        center = ['25', '31.5', '40', '50', '63', '80', '100', '125', '160', '200', 
+                  '250', '315','400', '500', '630', '800', '1 k', '1.25 k', '1.6 k', 
+                  '2 k', '2.5 k', '3.15 k', '4 k', '5 k', '6.3 k', '8 k', '10 k', 
+                  '12.5 k', '16 k', '20 k']
     if Hz:
         labels = []
         for i in center:
-            labels.append(str(i + ' Hz'))
+            labels.append(str(i + 'Hz'))
         return labels
     else:
         return center

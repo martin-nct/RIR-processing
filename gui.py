@@ -8,19 +8,19 @@ Created on Fri May 26 12:21:19 2023
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
-# from matplotlib import colors
 import soundfile as sf
-# import sounddevice as sd
-from PyQt5.QtWidgets import (QApplication, QWidget, QFileDialog, QPushButton, QGridLayout,
-                             QLabel, QColorDialog, QGroupBox, QLineEdit, QVBoxLayout, 
-                             QRadioButton, QCheckBox, QTableWidget, QTableWidgetItem)
+from PyQt5.QtWidgets import (QApplication, QWidget, QFileDialog, QPushButton, 
+                             QGridLayout, QLabel, QGroupBox, QLineEdit,
+                             QVBoxLayout, QRadioButton, QCheckBox,
+                             QTableWidget, QTableWidgetItem, QSizePolicy)
+from PyQt5.QtGui import QColor 
+from PyQt5.QtCore import QTimer 
 
 from main import Room_IR
 import funciones
 
 class SetUpWindow(QWidget, Room_IR):
     def __init__(self):
-        # super().__init__()
         super().__init__(windowTitle = 'Settings')
         
         # Imports:
@@ -28,18 +28,23 @@ class SetUpWindow(QWidget, Room_IR):
         
         self.loadSweep = QPushButton('Load Sweep')
         self.loadSweep.clicked.connect(self.load_sweep)
-        loadRec = QPushButton('Load Record')
-        loadRec.clicked.connect(self.load_recording)
+        self.loadRec = QPushButton('Load Recording')
+        self.loadRec.clicked.connect(self.load_recording)
+        self.from_RIR = QCheckBox('Processed RIR')
+        self.from_RIR.clicked.connect(self.processed_RIR)
+        self.from_RIR.setChecked(False)
         
         box0 = QVBoxLayout()
         box0.addWidget(self.loadSweep)
-        box0.addWidget(loadRec)
+        box0.addWidget(self.loadRec)
+        box0.addWidget(self.from_RIR)
         importBox.setLayout(box0)
         
         #Generate Sweep 
         self.generateBox = QGroupBox('Generate Sweep')
         self.generateBox.setCheckable(True)
         self.generateBox.setChecked(False)
+        self.generateBox.clicked.connect(self.reFormat_loadSweep)
         
         labelfmin = QLabel('Sart Freq')
         labelfmax = QLabel('End Freq')
@@ -91,20 +96,21 @@ class SetUpWindow(QWidget, Room_IR):
         # Aditional Settings
         setBox = QGroupBox('Aditional Settings')
         
-        noisecomp = QCheckBox('Noise Compensation')
-        noisecomp.setChecked(False)
+        self.noisecomp = QCheckBox('Noise Compensation')
+        self.noisecomp.setChecked(False)
         self.reverse = QCheckBox('Reverse filtering')
         self.reverse.setChecked(False)
         
         box4 = QVBoxLayout()
-        box4.addWidget(noisecomp)
+        box4.addWidget(self.noisecomp)
         box4.addWidget(self.reverse)
         setBox.setLayout(box4)
         
         # Calculate
-        self.process = QPushButton('Calculate Parameters')
-        self.process.clicked.connect(self.open_main)
-
+        self.process = QPushButton('Calculate Parameters',
+                                   sizePolicy=QSizePolicy(QSizePolicy.Expanding, 
+                                                          QSizePolicy.Expanding))
+        self.process.clicked.connect(self.reFormatProcess)
         
         # Main Layout
         mainBox = QGridLayout(self)
@@ -115,12 +121,26 @@ class SetUpWindow(QWidget, Room_IR):
         mainBox.addWidget(setBox, 2, 0, 1, 1)
         mainBox.addWidget(self.process, 2, 1, 1, 1)
         
-    # def reFormat(self):
-    #     self.process.setText('Calculating...')
-    #     self.process.setFlat(True)
-    #     if self.process.text() == 'Calculating...':
-    #         self.open_main()
+        self.resize(419, 288)
+        
+    def reFormatProcess(self):
+        self.process.setText('Calculating...')
+        self.process.setFlat(True)
+        
+        timer = QTimer()
+        timer.singleShot(500, self.open_main)
     
+    def reFormat_loadSweep(self):
+        self.loadSweep.setFlat(self.generateBox.isChecked())
+        
+    def processed_RIR(self):
+        if self.from_RIR.isChecked():
+            self.loadSweep.setFlat(True)
+            self.loadRec.setText('Load RIR')
+        else: 
+            self.loadSweep.setFlat(False)
+            self.loadRec.setText('Load Recording')
+        
     def open_main(self):
 
         if self.rb_octave.isChecked():
@@ -129,31 +149,46 @@ class SetUpWindow(QWidget, Room_IR):
             filtro = 1
         
         if self.rb_sch.isChecked():
-            method = 0
+            self.method = 0 # Schroeder reverse time integral 
         elif self.rb_mavg.isChecked():
-            method = 1
+            self.method = 1 # Moving Average Filter
         
+        # Arroja resultados insactifactorios:
         # if self.reverse.isChecked():
         #     reverse = 1
         # else: reverse = 0
         
-        if self.generateBox.isChecked():
-            self.IR_from_ss(self.fmin, self.fmax, self.time, self.fs)
-            self.loadSweep.setFlat()
-       
-        else:
-            self.get_inverse_filt()
-            self.linear_convolve()
+        if not self.from_RIR.isChecked():
 
-        self.get_bandas_validez(filtro)
-            
-        ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro, method)
+            if self.generateBox.isChecked():
+                
+                self.loadSweep.setFlat(True)
+                
+                self.fstart = float(self.fmin.text())
+                self.fend = float(self.fmax.text())
+                self.time = float(self.time.text())
+                self.fs = int(self.fs.text())
+                self.IR_from_ss(self.fstart, self.fend, self.time, self.fs)
+           
+            else:
+                self.get_inverse_filt()
+                self.linear_convolve()
+    
+            self.get_bandas_validez(filtro)
         
-        self.results, self.schroeder, self.mmfilt = self.get_acparam(ETC, method)
+        if self.noisecomp.isChecked():
+            self.comp = 1
+        else: self.comp = 0
+            
+        ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro)
+        
+        self.results, self.schroeder, self.mmfilt = self.get_acparam(ETC)
         
         self.ResultW = ResultWindow(self.results, self.schroeder, 
                                     self.mmfilt, self.fs, filtro, self.f_validas)
         self.ResultW.show()
+        self.ResultW.resize(1100, 650)
+        self.ResultW.move(123, 47)
         self.hide()
         
     def load_sweep(self):
@@ -166,7 +201,10 @@ class SetUpWindow(QWidget, Room_IR):
         filtro = 'WAV (*wav);;FLAC (*flac)'
         ruta = QFileDialog.getOpenFileName(filter=filtro)[0]
         if ruta != '':
-            self.rec, self.fs_rec = sf.read(ruta)
+            if self.from_RIR.isChecked():
+                self.load_extIR(ruta)
+            else:
+                self.rec, self.fs_rec = sf.read(ruta)
 
 class ResultWindow(QWidget):
     def __init__(self, results, schroeder, mmfilt, fs, filtro, f_validas):
@@ -178,16 +216,17 @@ class ResultWindow(QWidget):
         self.fs = fs
         self.filtro = filtro
         self.f_validas = f_validas
+        
         # Gráfico
         
         self.t = np.arange(0, self.mmfilt[0].size/self.fs, 1/self.fs)
         
         self.fig = Figure(dpi=100)
         ax = self.fig.subplots()
-        self.linea_ETC = ax.plot([], [], '--m', label='Schroeder Integral')[0]
+        if self.schroeder is not None:
+            self.linea_ETC = ax.plot([], [], '--m', label='Schroeder Integral')[0]
         self.linea_EDC = ax.plot([], [], '-k', label='Moving Average')[0]
         ax.grid()
-        ax.set_title('Energy Time Curve')
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Level [dB]')
         ax.set_ylim([-1, 1])
@@ -202,7 +241,10 @@ class ResultWindow(QWidget):
         self.linea_EDC.axes.set_xlim(self.t[0], self.t[-1])
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
-        self.linea_ETC.figure.canvas.draw()
+        label = funciones.labels_bandas(self.filtro, True)[5]
+        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})')
+        
+        self.linea_EDC.figure.canvas.draw()
         ax.legend()
         
         self.save_gr = QPushButton('Save Graph')
@@ -210,6 +252,7 @@ class ResultWindow(QWidget):
         
         # Tabla
         self.tableWidget = QTableWidget(7, 11)
+        self.tableWidget.setBaseSize(100, 100)
         self.tableWidget.cellClicked.connect(self.clicked_cell)
         self.config_table(self.results, self.filtro)
         
@@ -218,21 +261,12 @@ class ResultWindow(QWidget):
         
 
         layout = QGridLayout(self)
-        layout.addWidget(canvas, 0, 0, 1, 4)
-        layout.addWidget(self.tableWidget, 1, 0, 2, 4)
-        layout.addWidget(self.save_gr, 0, 5, 1, 1)
-        layout.addWidget(self.save_tab, 1, 5, 1, 1)
+        layout.addWidget(canvas, 0, 0, 1, 1)
+        layout.addWidget(self.tableWidget, 1, 0, 1, 1)
+        layout.addWidget(self.save_gr, 0, 1, 1, 1)
+        layout.addWidget(self.save_tab, 1, 1, 1, 1)
         
     def config_table(self, data, filtro):
-        
-        if filtro == 0:
-            center = funciones.octavas()
-        elif filtro == 1:
-            center = funciones.tercios()
-        
-        for i in self.f_validas:
-            if i in center:
-                print(i)
         
         numcols = len(data)
         numrows = len(data[0])
@@ -246,8 +280,23 @@ class ResultWindow(QWidget):
                 item = str(list(data[column].values())[row])
                 self.tableWidget.setItem(row, column, QTableWidgetItem(item))
         
+        #Colorea las columnas (bandas) en las cuales no es válido el resultado
+        
+        if filtro == 0:
+            center = funciones.octavas()
+        elif filtro == 1:
+            center = funciones.tercios()
+        
+        for i, f in enumerate(center):
+            
+            if f not in self.f_validas:
+                self.set_column_color(i, QColor(255, 0, 0, 127))
+        
+    def set_column_color(self, column, color):
+        for j in range(self.tableWidget.rowCount()):
+            self.tableWidget.item(j, column).setBackground(color)
+        
     def clicked_cell(self, row, column):
-        # print('clicked!', row, column)
         
         if self.schroeder is not None:
             self.linea_ETC.set_ydata(self.schroeder[column])
@@ -256,18 +305,18 @@ class ResultWindow(QWidget):
         self.linea_EDC.set_ydata(self.mmfilt[column])
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
-        self.linea_ETC.figure.canvas.draw()
+        label = funciones.labels_bandas(self.filtro, True)[column]
+        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})')
+        
+        self.linea_EDC.figure.canvas.draw()
     
     def save_graph(self):
-        # print('y si')
-        
         ruta = QFileDialog.getSaveFileName(directory='figure.png', 
                                            filter='Portable Network Graphics (*png)')[0]
         if ruta != '':
             self.fig.savefig(ruta, format='png')
     
     def save_data(self):
-        # print('por supuesto')
         ruta = QFileDialog.getSaveFileName(directory='data.csv', 
                                            filter='*csv')[0]
         if ruta != '':
@@ -281,7 +330,6 @@ class ResultWindow(QWidget):
             data[0, 1:] = funciones.labels_bandas(self.filtro)
     
             for row in range(numrows):
-                # row += 1
                 for column in range(numcols+1):
                     if column == 0:
                         data[row+1, column] = (list(self.results[0].keys())[row])
@@ -290,10 +338,9 @@ class ResultWindow(QWidget):
     
             np.savetxt(ruta, data, fmt='%s', delimiter=',')
 
-        
-        
-app = QApplication([])
-ventana = SetUpWindow()
-# ventana = ResultWindow()
-ventana.show()
-app.exec_()
+
+if __name__ == '__main__':
+    app = QApplication([])
+    ventana = SetUpWindow()
+    ventana.show()
+    app.exec_()
