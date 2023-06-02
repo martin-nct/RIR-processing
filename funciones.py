@@ -1000,26 +1000,42 @@ def calc_EDT(smoothed_IR, fs):
     
 ## Clarity
 
-def calc_C50(smoothed_IR, fs):
-    N50 = int(.05 * fs)
-    C50 = 10 * np.log10(np.sum(smoothed_IR[:N50])  / np.sum(smoothed_IR[N50:])) # Calculate the C50
+def calc_C50(IR, fs):
+    t50 = int(0.05 * fs)
+    IR = IR ** 2 # Raise the IR to the second power
+    C50 = 10 * np.log10(np.cumsum(IR[:t50])  / np.cumsum(IR[t50:])) # Calculate the C50
         
     return round(C50, 3)
 
-def calc_C80(smoothed_IR, fs):
-    N80 = int(.08 * fs)
-    C80 = 10 * np.log10(np.sum(smoothed_IR[:N80])  / np.sum(smoothed_IR[N80:])) # Calculate the C80
+def calc_C80(IR, fs):
+    t80 = int(0.08 * fs)
+    C80 = 10 * np.log10(np.cumsum(IR[:t80])  / np.cumsum(IR[t80:])) # Calculate the C80
     
     return round(C80, 3)
 
 ## Tt & EDTt
 
-def calc_Tt(filtered_IR, fs):
+def calc_Tt(IR, fs):
     # Tt = np.max(np.where(np.cumsum(filtered_IR) <= 0.99 * np.max(np.sum(filtered_IR))))
-    Tt = np.argmax(np.cumsum(filtered_IR) <= 0.99 * np.sum(filtered_IR)) / fs
+    Tt = np.argmax(np.cumsum(IR ** 2) <= 0.99 * np.sum(IR ** 2)) / fs
+
     
     # EDTt_min = np.argwhere(filtered_IR > -1)[-1]
     # EDTt_max = Tt.copy()
     # EDTt = 
     
     return round(Tt, 3)
+
+def calc_EDTt(IR, fs):
+    
+    Tt = calc_Tt(IR, fs) # Transition Time
+    peak_idx = np.argmax(IR)
+    peak = IR[peak_idx] # Peak of the IR
+    x = np.array([Tt, peak_idx]) 
+    y = np.array([peak, IR[Tt]])
+    slope, intercept = cuad_min(x, y)
+    EDTt = -intercept / slope
+    
+    return EDTt
+    
+    

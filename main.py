@@ -13,6 +13,7 @@ import funciones
 
 
 class Room_IR():
+    
     def __init__(self):
         
         self.fs = None
@@ -42,7 +43,7 @@ class Room_IR():
         signal_fft = np.fft.rfft(self.rec)
         inv_filt_fft = np.fft.rfft(inv_filt)
         
-        IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
+        IR_fft = signal_fft * inv_filt_fft  # Obtain the FFT of the impulse response
         IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
         self.IR = IR / np.max(np.abs(IR))
         
@@ -401,10 +402,10 @@ class Room_IR():
           d["RT30"] = funciones.calc_RT30(filtered_IR, self.fs)
           d["EDT"] = funciones.calc_EDT(filtered_IR, self.fs)
           # d["IACCEARLY"] = # ¿Cómo procesamos este parámetro?
-          d["C50"] = funciones.calc_C50(filtered_IR, self.fs) 
-          d["C80"] = funciones.calc_C80(filtered_IR, self.fs)
-          d["Tt"] = funciones.calc_Tt(filtered_IR, self.fs)
-          # d["EDTt"] = ""
+          d["C50"] = funciones.calc_C50(self.IR, self.fs) 
+          d["C80"] = funciones.calc_C80(self.IR, self.fs)
+          d["Tt"] = funciones.calc_Tt(self.IR, self.fs)
+          d["EDTt"] = funciones.calc_EDTt(self.IR, self.fs)
           return d
           
     def get_acparam(self, ETC):
