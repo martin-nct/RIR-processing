@@ -158,11 +158,13 @@ class SetUpWindow(QWidget, Room_IR):
         #     reverse = 1
         # else: reverse = 0
         
+        if self.noisecomp.isChecked():
+            self.comp = 1
+        else: self.comp = 0
+        
         if not self.from_RIR.isChecked():
 
             if self.generateBox.isChecked():
-                
-                self.loadSweep.setFlat(True)
                 
                 self.fstart = float(self.fmin.text())
                 self.fend = float(self.fmax.text())
@@ -173,12 +175,11 @@ class SetUpWindow(QWidget, Room_IR):
             else:
                 self.get_inverse_filt()
                 self.linear_convolve()
-    
+            
+            self.IR_trim(T_end=10)
             self.get_bandas_validez(filtro)
         
-        if self.noisecomp.isChecked():
-            self.comp = 1
-        else: self.comp = 0
+
             
         ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro)
         
@@ -187,7 +188,7 @@ class SetUpWindow(QWidget, Room_IR):
         self.ResultW = ResultWindow(self.results, self.schroeder, 
                                     self.mmfilt, self.fs, filtro, self.f_validas)
         self.ResultW.show()
-        self.ResultW.resize(1100, 650)
+        self.ResultW.resize(1100, 680)
         self.ResultW.move(123, 47)
         self.hide()
         

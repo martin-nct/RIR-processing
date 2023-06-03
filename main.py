@@ -13,7 +13,6 @@ import funciones
 
 
 class Room_IR():
-    
     def __init__(self):
         
         self.fs = None
@@ -43,25 +42,26 @@ class Room_IR():
         signal_fft = np.fft.rfft(self.rec)
         inv_filt_fft = np.fft.rfft(inv_filt)
         
-        IR_fft = signal_fft * inv_filt_fft  # Obtain the FFT of the impulse response
+        IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
         IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
         self.IR = IR / np.max(np.abs(IR))
         
-        # Pase a decibeles
-        self.IR_dB = funciones.a_dBFS(self.IR)
         
-        # Se encuentra el inicio del impulso y se descartan las muestras
-        # anteriores
-        Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
-        T_end = 5 # segundos
-        Nend = int(T_end * self.fs)
+        # # Pase a decibeles
+        # self.IR_dB = funciones.a_dBFS(self.IR)
+        
+        # # Se encuentra el inicio del impulso y se descartan las muestras
+        # # anteriores
+        # Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
+        # T_end = 5 # segundos
+        # Nend = int(T_end * self.fs)
 
-        self.IR = self.IR[Nstart:Nstart+Nend]
+        # self.IR = self.IR[Nstart:Nstart+Nend]
         
-        # Filtra la señal entre las frecuencias extremo del sweep
-        self.IR = funciones.filtro_pasabanda(self.IR, f0, f1, self.fs)
+        # # Filtra la señal entre las frecuencias extremo del sweep
+        # self.IR = funciones.filtro_pasabanda(self.IR, f0, f1, self.fs)
         
-        # return self.IR, self.fs
+        # # return self.IR, self.fs
         
     def get_bandas_validez(self, filtro):
         
@@ -152,7 +152,7 @@ class Room_IR():
         
         self.rec, self.fs_rec = sf.read(file)
         
-    def linear_convolve(self, T_end=None):
+    def linear_convolve(self):
         
         if self.fs == self.fs_rec:
             
@@ -162,20 +162,29 @@ class Room_IR():
             
             # Pase a decibeles
             self.IR_dB = funciones.a_dBFS(self.IR)
-            
-            # Se encuentra el inicio del impulso y se descartan las muestras
-            # anteriores
-            Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
-            if T_end is None:
-                T_end = 5 # segundos
-            Nend = int(T_end * self.fs)
-            
 
-            self.IR = self.IR[Nstart:Nstart+Nend]
+    def IR_trim(self, T_end=None):
+        # Se encuentra el inicio del impulso y se descartan las muestras
+        # anteriores
+        if T_end is None:
+            T_end = 5 # segundos
             
-            # Filtra la señal entre las frecuencias extremo del sweep
-            self.IR = funciones.filtro_pasabanda(self.IR, self.fstart, 
-                                                  self.fend, self.fs)
+        N_start = np.argmax(np.abs(self.IR))
+        N_correc = np.argwhere(np.abs(self.IR)>=0.1) # -20 dB 
+        delta = N_start - N_correc[0]
+        while delta > 100:          # el inicio a menos de 100 muestras del máximo
+            N_correc = N_correc[1:]
+            delta = N_start - N_correc[0]
+            print(delta)
+        N_correc = int(N_correc[0])
+        N_end = N_correc + int(T_end * self.fs)
+        self.IR = self.IR[N_correc:N_end]
+
+        # self.IR = self.IR[Nstart:Nstart+Nend]
+        
+        # Filtra la señal entre las frecuencias extremo del sweep
+        # self.IR = funciones.filtro_pasabanda(self.IR, self.fstart, 
+                                                  # self.fend, self.fs)
     
     def load_extIR(self, file):
         self.IR, self.fs = sf.read(file)
@@ -183,15 +192,15 @@ class Room_IR():
         self.IR /= max(abs(self.IR))
         
         # Pase a decibeles
-        self.IR_dB = funciones.a_dBFS(self.IR)
+        # self.IR_dB = funciones.a_dBFS(self.IR)
         
-        # Se encuentra el inicio del impulso y se descartan las muestras
-        # anteriores
-        Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
-        T_end = 5 # segundos
-        Nend = int(T_end * self.fs)
+        # # Se encuentra el inicio del impulso y se descartan las muestras
+        # # anteriores
+        # Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
+        # T_end = 5 # segundos
+        # Nend = int(T_end * self.fs)
         
-        self.IR = self.IR[Nstart:Nstart+Nend]
+        # self.IR = self.IR[Nstart:Nstart+Nend]
         
     
     def smooth_energyc(self, IR, M=2400, mode=1):
@@ -331,10 +340,10 @@ class Room_IR():
         if self.method == 0:
             C, N_c = self.crosspoint_lundeby(Ec)
             if not self.comp: C = 0
-            return self.schroeder_int(impfilt, N_c, C), Ec
+            return self.schroeder_int(impfilt, N_c, C), Ec, impfilt
         
         if self.method == 1:
-            return Ec
+            return Ec, impfilt
     
     def calcula_ETC(self, param, imp, fs, filtro=0, N=5, reverse=0):
         '''
@@ -385,7 +394,7 @@ class Room_IR():
                 salida.append(param(impfilt, fs, frecs[i]))
             return salida
         
-    def acoustical_parameters (self, filtered_IR):
+    def acoustical_parameters (self, smoothed_IR, filtered_IR):
 
           # Dictionary to store the parameters
           d = {"RT20":"",
@@ -395,17 +404,17 @@ class Room_IR():
                "C50":"",
                "C80":"",
                "Tt":"",
-               # "EDTt":""
+                "EDTt":""
           }
           
-          d["RT20"] = funciones.calc_RT20(filtered_IR, self.fs)
-          d["RT30"] = funciones.calc_RT30(filtered_IR, self.fs)
-          d["EDT"] = funciones.calc_EDT(filtered_IR, self.fs)
+          d["RT20"] = funciones.calc_RT20(smoothed_IR, self.fs)
+          d["RT30"] = funciones.calc_RT30(smoothed_IR, self.fs)
+          d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs)
           # d["IACCEARLY"] = # ¿Cómo procesamos este parámetro?
-          d["C50"] = funciones.calc_C50(self.IR, self.fs) 
-          d["C80"] = funciones.calc_C80(self.IR, self.fs)
-          d["Tt"] = funciones.calc_Tt(self.IR, self.fs)
-          d["EDTt"] = funciones.calc_EDTt(self.IR, self.fs)
+          d["C50"], d["C80"] = funciones.c_parameters(filtered_IR, self.fs) 
+          # d["C80"] = funciones.calc_C80(filtered_IR, self.fs)
+          # d["Tt"] = funciones.calc_Tt(filtered_IR, self.fs)
+          d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
           return d
           
     def get_acparam(self, ETC):
@@ -418,15 +427,13 @@ class Room_IR():
             for i in range(len(ETC)):
                 schr.append(ETC[i][0])
                 mmfilt.append(ETC[i][1])
-            mmfilt = np.array(mmfilt)
-            
-            for i in range(len(schr)):
-                results.append(self.acoustical_parameters(schr[i]))  
+                results.append(self.acoustical_parameters(schr[i], ETC[i][2]))
+            # mmfilt = np.array(mmfilt)
         
         elif self.method == 1:
             for i in range(len(ETC)):
-                results.append(self.acoustical_parameters(ETC[i]))
+                mmfilt.append(ETC[i][0])
+                results.append(self.acoustical_parameters(ETC[i][0], ETC[i][1]))
             schr = None
-            mmfilt = ETC
         
         return results, schr, mmfilt

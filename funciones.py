@@ -205,6 +205,44 @@ def plot_impz(b, a = 1, l=100):
     plt.ylabel('Amplitud')
     plt.xlabel('n (muestras)')
     plt.title('Respuesta al Impulso')
+    
+def plot_impz_sos(sos, l=100, filtfilt=True, plot=True):
+    '''
+    Impulse response of a sos digital filter.
+
+    Parameters
+    ----------
+    sos : array
+        Second Order Section coefficients of the digital filter.
+    l : int, optional
+        Length for the dirac signal. The default is 100.
+    filtfilt : bool, optional
+        Wether the filter is forward-backward applied or not. The default is True.
+    plot : bool, optional
+        If True, plots de impulse response. The default is True.
+
+    Returns
+    -------
+    response : array
+        Impulse response of the filter.
+
+    '''
+    impulse = np.repeat(0.,l)
+    impulse[0] =1.
+    x = np.arange(0,l)
+    if filtfilt:
+        response = sig.sosfiltfilt(sos, impulse)
+    else:
+        response = sig.sosfilt(sos, impulse)
+    if plot:
+        plt.figure()
+        plt.plot(x, response)
+        plt.grid()
+        plt.ylabel('Amplitud')
+        plt.xlabel('n (muestras)')
+        plt.title('Respuesta al Impulso')
+    
+    return response
 
 def plot_magyfas(w, H, l=15, a=5):
     """
@@ -603,7 +641,11 @@ def butter_pasabajos(N, fc, fs):
     wc = fc / (0.5 * fs)
     return sig.butter(N, wc, 'low', output='sos')
 
-def filtro_pasabanda(señal, flow, fhigh, fs, N=5):
+def butter_pasaaltos(N, fc, fs):
+    wc = fc / (0.5 * fs)
+    return sig.butter(N, wc, 'high', output='sos')
+
+def filtro_pasabanda(señal, flow, fhigh, fs, N=5, filtfilt=False):
     '''
     Aplica un filtro pasabanda tipo 'sos'.
 
@@ -627,7 +669,10 @@ def filtro_pasabanda(señal, flow, fhigh, fs, N=5):
 
     '''
     sos = butter_pasabanda(N, flow, fhigh, fs)
-    y = sig.sosfilt(sos, señal)
+    if filtfilt:
+        y = sig.sosfiltfilt(sos, señal)
+    else: 
+        y = sig.sosfilt(sos, señal)
     return y
 
 def parametro_banda(parametro, señal, fs, flow, fhigh, N=5):
@@ -1013,29 +1058,48 @@ def calc_C80(IR, fs):
     
     return round(C80, 3)
 
+def c_parameters(filtered_IR, fs):
+    
+    N50 = int(.05 * fs)
+    N80 = int(.08 * fs)
+    C50 = 10 * np.log10(np.sum(filtered_IR[:N50]**2)  / np.sum(filtered_IR[N50:]**2))
+    C80 = 10 * np.log10(np.sum(filtered_IR[:N80]**2)  / np.sum(filtered_IR[N80:]**2))
+    return round(C50, 3), round(C80, 3)
+
 ## Tt & EDTt
 
-def calc_Tt(IR, fs):
+def idx_Tt(filtered_IR):
+    '''
+    Calcula el índice (muestra) para el Transition Time
+
+    Parameters
+    ----------
+    filtered_IR : array
+        Impulso filtrado en banda.
+
+    Returns
+    -------
+    index : int
+
+    '''
     # Tt = np.max(np.where(np.cumsum(filtered_IR) <= 0.99 * np.max(np.sum(filtered_IR))))
-    Tt = np.argmax(np.cumsum(IR ** 2) <= 0.99 * np.sum(IR ** 2)) / fs
+    
+    index = np.argmin(np.cumsum(filtered_IR**2) <= 0.99 * np.sum(filtered_IR**2))
+    return index
 
+def calc_EDTt(filtered_IR, smoothed_IR, fs):
     
-    # EDTt_min = np.argwhere(filtered_IR > -1)[-1]
-    # EDTt_max = Tt.copy()
-    # EDTt = 
+    index = idx_Tt(filtered_IR) # Transition Time
+    Tt = index / fs
     
-    return round(Tt, 3)
-
-def calc_EDTt(IR, fs):
+    peak_idx = np.argmax(filtered_IR)
     
-    Tt = calc_Tt(IR, fs) # Transition Time
-    peak_idx = np.argmax(IR)
-    peak = IR[peak_idx] # Peak of the IR
-    x = np.array([Tt, peak_idx]) 
-    y = np.array([peak, IR[Tt]])
-    slope, intercept = cuad_min(x, y)
-    EDTt = -intercept / slope
+    N = len(smoothed_IR)
     
-    return EDTt
+    t = np.arange(0, N/fs, 1/fs)
     
+    p = cuad_min(t[peak_idx : index], smoothed_IR[peak_idx : index])
     
+    EDTt = -60 / p[0]
+    
+    return round(EDTt, 3), round(Tt, 3)
