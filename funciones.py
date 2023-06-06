@@ -1103,3 +1103,11 @@ def calc_EDTt(filtered_IR, smoothed_IR, fs):
     EDTt = -60 / p[0]
     
     return round(EDTt, 3), round(Tt, 3)
+
+def calc_IACC_early(IR_L, IR_R, fs):
+    
+    num = np.correlate(IR_L[0:int(0.8 * fs)], IR_R[0:int(0.08 * fs)])
+    den = np.sqrt(np.sum(IR_L[0:int(0.8 * fs)] ** 2) * (np.sum(IR_R[0:int(0.8 * fs)] ** 2)))
+    IACC_early = np.max(np.abs(num / den)) # Normalizad IACC_early
+    
+    return IACC_early

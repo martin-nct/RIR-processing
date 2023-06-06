@@ -17,6 +17,9 @@ class Room_IR():
         
         self.fs = None
         self.IR = None
+        self.is_binaural = False
+        self.IR_L = None
+        self.IR_R = None
         
     def load_sweep(self, file):
         
@@ -188,6 +191,12 @@ class Room_IR():
     
     def load_extIR(self, file):
         self.IR, self.fs = sf.read(file)
+        
+        if self.IR.shape[1] > 1:
+            self.is_binaural = True
+            self.IR_L = self.IR[:, 0] # Left channel of the IR
+            self.IR_R = self.IR[:, 1] # Right channel of the IR
+            self.IR = (self.IR_L + self.IR_R) / 2 # Combine both channels
         
         self.IR /= max(abs(self.IR))
         
@@ -400,7 +409,6 @@ class Room_IR():
           d = {"RT20":"",
                "RT30":"",
                "EDT":"",
-               # "IACCEARLY":"",
                "C50":"",
                "C80":"",
                "Tt":"",
@@ -409,12 +417,12 @@ class Room_IR():
           
           d["RT20"] = funciones.calc_RT20(smoothed_IR, self.fs)
           d["RT30"] = funciones.calc_RT30(smoothed_IR, self.fs)
-          d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs)
-          # d["IACCEARLY"] = # ¿Cómo procesamos este parámetro?
-          d["C50"], d["C80"] = funciones.c_parameters(filtered_IR, self.fs) 
-          # d["C80"] = funciones.calc_C80(filtered_IR, self.fs)
-          # d["Tt"] = funciones.calc_Tt(filtered_IR, self.fs)
+          d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs) 
+          d["C50"] = funciones.calc_C50(self.IR, self.fs) 
+          d["C80"] = funciones.calc_C80(self.IR, self.fs)
           d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
+          if self.is_binaural:
+              d["IACCEARLY"] = funciones.calc_IAC_early(self.IR_L, self.IR_R, self.fs)
           return d
           
     def get_acparam(self, ETC):
