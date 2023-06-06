@@ -13,19 +13,19 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QFileDialog, QPushButton,
                              QGridLayout, QLabel, QGroupBox, QLineEdit,
                              QVBoxLayout, QRadioButton, QCheckBox,
                              QTableWidget, QTableWidgetItem, QSizePolicy)
-from PyQt5.QtGui import QColor 
-from PyQt5.QtCore import QTimer 
+from PyQt5.QtGui import QColor, QCursor, QIcon 
+from PyQt5.QtCore import QTimer, Qt 
 
 from main import Room_IR
 import funciones
 
 class SetUpWindow(QWidget, Room_IR):
     def __init__(self):
-        super().__init__(windowTitle = 'Settings')
+        super().__init__(windowTitle = 'RIR Processor by G. Caminos & M. Nocito - Settings')
         
         # Imports:
         importBox = QGroupBox('Import')
-        
+    
         self.loadSweep = QPushButton('Load Sweep')
         self.loadSweep.clicked.connect(self.load_sweep)
         self.loadRec = QPushButton('Load Recording')
@@ -46,10 +46,10 @@ class SetUpWindow(QWidget, Room_IR):
         self.generateBox.setChecked(False)
         self.generateBox.clicked.connect(self.reFormat_loadSweep)
         
-        labelfmin = QLabel('Sart Freq')
-        labelfmax = QLabel('End Freq')
-        labeltime = QLabel('Time')
-        labelfs = QLabel('Sample Rate')
+        labelfmin = QLabel('Sart Frequency [Hz]')
+        labelfmax = QLabel('End Frequency [Hz]')
+        labeltime = QLabel('Time [s]')
+        labelfs = QLabel('Sample Rate [Hz]')
         
         self.fmin = QLineEdit()
         self.fmax = QLineEdit()
@@ -110,6 +110,7 @@ class SetUpWindow(QWidget, Room_IR):
         self.process = QPushButton('Calculate Parameters',
                                    sizePolicy=QSizePolicy(QSizePolicy.Expanding, 
                                                           QSizePolicy.Expanding))
+        self.process.setMaximumHeight(100)
         self.process.clicked.connect(self.reFormatProcess)
         
         # Main Layout
@@ -121,10 +122,33 @@ class SetUpWindow(QWidget, Room_IR):
         mainBox.addWidget(setBox, 2, 0, 1, 1)
         mainBox.addWidget(self.process, 2, 1, 1, 1)
         
-        self.resize(419, 288)
+        # Footer / Credits
+        footer_label = QLabel('Developed by <a href="mailto:mnocito8@gmail.com" style="text-decoration: none; color: #FFF;">M. Nocito</a> & <a href="mailto:caminos47501@estudiantes.untref.edu.ar" style="text-decoration: none; color: #FFF;">G. Caminos</a>')
+        footer_label.setAlignment(Qt.AlignCenter)
+        footer_label.setOpenExternalLinks(True)
+        footer_label.setWordWrap(True)
+        footer_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        footer_label.setCursor(QCursor(Qt.PointingHandCursor))
+    
+        # Footer Layout
+        footer_layout = QVBoxLayout()
+        footer_layout.addWidget(footer_label)
         
+        # Footer Container
+        footer_container = QWidget()
+        footer_container.setLayout(footer_layout)
+        footer_container.setMaximumHeight(50)
+        
+        # Add Footer to Main Layout
+        mainBox.addWidget(footer_container, 3, 0, 1, 2)
+        
+        mainBox.setSpacing(10)
+        
+        self.resize(419, 400)
+        
+           
     def reFormatProcess(self):
-        self.process.setText('Calculating...')
+        self.process.setText('Calculating, please wait...')
         self.process.setFlat(True)
         
         timer = QTimer()
@@ -207,9 +231,10 @@ class SetUpWindow(QWidget, Room_IR):
             else:
                 self.rec, self.fs_rec = sf.read(ruta)
 
+#%%
 class ResultWindow(QWidget):
     def __init__(self, results, schroeder, mmfilt, fs, filtro, f_validas):
-        super().__init__(windowTitle = 'Room Impulse Response')
+        super().__init__(windowTitle = 'RIR Processor by G. Caminos & M. Nocito - Room Impulse Response')
         
         self.results = results
         self.schroeder = schroeder
@@ -224,9 +249,22 @@ class ResultWindow(QWidget):
         
         self.fig = Figure(dpi=100)
         ax = self.fig.subplots()
+        
+        # Config. style and colors of plots
+        self.fig.patch.set_facecolor('#0a0a23')
+        ax.set_facecolor('#0a0a23')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        
         if self.schroeder is not None:
-            self.linea_ETC = ax.plot([], [], '--m', label='Schroeder Integral')[0]
-        self.linea_EDC = ax.plot([], [], '-k', label='Moving Average')[0]
+            self.linea_ETC = ax.plot([], [], '--m', label='Schroeder Integral', zorder=5)[0]
+        self.linea_EDC = ax.plot([], [], '-w', label='Moving Average')[0]
         ax.grid()
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Level [dB]')
@@ -243,7 +281,7 @@ class ResultWindow(QWidget):
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
         label = funciones.labels_bandas(self.filtro, True)[5]
-        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})')
+        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})', color="#FFF")
         
         self.linea_EDC.figure.canvas.draw()
         ax.legend()
@@ -260,12 +298,35 @@ class ResultWindow(QWidget):
         self.save_tab = QPushButton('Save Data')
         self.save_tab.clicked.connect(self.save_data)
         
-
         layout = QGridLayout(self)
         layout.addWidget(canvas, 0, 0, 1, 1)
         layout.addWidget(self.tableWidget, 1, 0, 1, 1)
         layout.addWidget(self.save_gr, 0, 1, 1, 1)
         layout.addWidget(self.save_tab, 1, 1, 1, 1)
+        
+        # Footer / Credits
+        footer_label = QLabel('Developed by <a href="mailto:mnocito8@gmail.com" style="text-decoration: none; color: #FFF;">M. Nocito</a> & <a href="mailto:caminos47501@estudiantes.untref.edu.ar" style="text-decoration: none; color: #FFF;">G. Caminos</a>')
+        footer_label.setAlignment(Qt.AlignCenter)
+        footer_label.setOpenExternalLinks(True)
+        footer_label.setWordWrap(True)
+        footer_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        footer_label.setCursor(QCursor(Qt.PointingHandCursor))
+    
+        # Footer Layout
+        footer_layout = QVBoxLayout()
+        footer_layout.addWidget(footer_label)
+        
+        # Footer Container
+        footer_container = QWidget()
+        footer_container.setLayout(footer_layout)
+        footer_container.setMaximumHeight(50)
+        
+        # Add Footer to Main Layout
+        layout.addWidget(footer_container, 3, 0, 1, 2)
+        
+        layout.setSpacing(10)
+        
+        
         
     def config_table(self, data, filtro):
         
@@ -307,7 +368,7 @@ class ResultWindow(QWidget):
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
         label = funciones.labels_bandas(self.filtro, True)[column]
-        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})')
+        self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})', color="#FFF")
         
         self.linea_EDC.figure.canvas.draw()
     
@@ -342,6 +403,16 @@ class ResultWindow(QWidget):
 
 if __name__ == '__main__':
     app = QApplication([])
+    
+    # Styles
+    with open('styles.css', 'r') as file:
+        style_sheet = file.read()
+    app.setStyleSheet(style_sheet)
+    
+    # Icon
+    icon = QIcon('RIR.ico')
+
     ventana = SetUpWindow()
+    ventana.setWindowIcon(icon)
     ventana.show()
     app.exec_()

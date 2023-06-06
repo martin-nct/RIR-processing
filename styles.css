@@ -1,0 +1,71 @@
+/** Created by: Gastón Caminos **/
+
+/** Main Window format**/
+SetUpWindow, ResultWindow {
+    color: #FFF;
+    background-color: #0a0a23;
+}
+
+/** Group boxes format **/
+QGroupBox {
+    color: #FFF;
+    background-color: #1b1b32;
+    border: 1px solid #ccc ;
+    border-radius: 10px;
+}
+
+/** Buttons format **/
+QRadioButton {
+    color: #FFF;
+}
+
+QCheckBox {
+    color: #FFF;
+}
+
+QPushButton {
+    background-color: #99c9ff;
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 5px;
+    text-align: center;
+    font-size: 16px;
+}
+        
+QPushButton:hover {
+    background-color: #99e2ff;     
+}
+
+QPushButton:pressed {
+    background-color: #1b1b32;
+}
+
+/** Labels format **/
+QLabel {
+    color: #FFF;
+}
+
+/** Text fields format **/
+QLineEdit {
+    background-color: #99c9ff;
+    border: none;
+    border-radius: 5px;
+}
+
+/** Table format **/
+QTableWidget {
+    background-color: #0a0a23; 
+    color: #FFF; 
+    border: none;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QHeaderView::section {
+    background-color: #1b1b32;
+    color: #FFF;
+    padding: 5px;
+}
