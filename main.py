@@ -418,8 +418,7 @@ class Room_IR():
           d["RT20"] = funciones.calc_RT20(smoothed_IR, self.fs)
           d["RT30"] = funciones.calc_RT30(smoothed_IR, self.fs)
           d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs) 
-          d["C50"] = funciones.calc_C50(self.IR, self.fs) 
-          d["C80"] = funciones.calc_C80(self.IR, self.fs)
+          d["C50"], d["C80"] = funciones.c_parameters(self.IR, self.fs) 
           d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
           if self.is_binaural:
               d["IACCEARLY"] = funciones.calc_IAC_early(self.IR_L, self.IR_R, self.fs)
