@@ -845,18 +845,20 @@ def mediamovil_rcsv(x, M):
 
     '''
     if type(M) != int:
-        M = int(M)
-    
-    L = len(x) - M
+        M = int(M)      # tamaño de ventana
+    if M >= len(x):
+            raise IndexError('Window length greater than signal')
+    L = len(x) - M + 1  # cantidad de ventanas
     y = np.zeros(L)
     
-    Acc = np.sum(x[0:M-1])
+    # Acc = np.sum(x[0:M-1])
+    Acc = np.sum(x[0:M])
     y[0] = Acc/M
     
     for i in range(1, L):
         Acc = Acc + x[i+M-1] - x[i-1]
         y[i] = Acc/M
-    y = np.hstack([y, y[L-M:]])
+    y = np.hstack([y, y[L-M+1:]])
     return y
 
 # def mediamovil_rcsv(y, m):
@@ -1110,4 +1112,4 @@ def calc_IACC_early(IR_L, IR_R, fs):
     den = np.sqrt(np.sum(IR_L[0:int(0.8 * fs)] ** 2) * (np.sum(IR_R[0:int(0.8 * fs)] ** 2)))
     IACC_early = np.max(np.abs(num / den)) # Normalizad IACC_early
     
-    return IACC_early
+    return round(IACC_early, 3)

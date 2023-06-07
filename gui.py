@@ -186,7 +186,13 @@ class SetUpWindow(QWidget, Room_IR):
             self.comp = 1
         else: self.comp = 0
         
-        if not self.from_RIR.isChecked():
+        if self.from_RIR.isChecked():
+            if filtro == 0:
+                self.f_validas = funciones.octavas()
+            elif filtro == 1:
+                self.f_validas = funciones.tercios()
+        
+        else:
 
             if self.generateBox.isChecked():
                 
@@ -200,10 +206,9 @@ class SetUpWindow(QWidget, Room_IR):
                 self.get_inverse_filt()
                 self.linear_convolve()
             
-            self.IR_trim(T_end=10)
             self.get_bandas_validez(filtro)
         
-
+        self.IR_trim()
             
         ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro)
         
@@ -214,6 +219,7 @@ class SetUpWindow(QWidget, Room_IR):
         self.ResultW.show()
         self.ResultW.resize(1100, 680)
         self.ResultW.move(123, 47)
+        self.ResultW.setWindowIcon(icon)
         self.hide()
         
     def load_sweep(self):
@@ -231,7 +237,7 @@ class SetUpWindow(QWidget, Room_IR):
             else:
                 self.rec, self.fs_rec = sf.read(ruta)
 
-#%%
+
 class ResultWindow(QWidget):
     def __init__(self, results, schroeder, mmfilt, fs, filtro, f_validas):
         super().__init__(windowTitle = 'RIR Processor by G. Caminos & M. Nocito - Room Impulse Response')

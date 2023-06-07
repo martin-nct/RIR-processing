@@ -6,6 +6,7 @@ Created on Mon Apr 24 12:36:57 2023
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy.signal as signal
 from scipy.ndimage import median_filter
 import soundfile as sf
@@ -48,19 +49,7 @@ class Room_IR():
         IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
         IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
         self.IR = IR / np.max(np.abs(IR))
-        
-        
-        # # Pase a decibeles
-        # self.IR_dB = funciones.a_dBFS(self.IR)
-        
-        # # Se encuentra el inicio del impulso y se descartan las muestras
-        # # anteriores
-        # Nstart = int(np.argwhere(self.IR_dB>=-30)[0])
-        # T_end = 5 # segundos
-        # Nend = int(T_end * self.fs)
 
-        # self.IR = self.IR[Nstart:Nstart+Nend]
-        
         # # Filtra la señal entre las frecuencias extremo del sweep
         # self.IR = funciones.filtro_pasabanda(self.IR, f0, f1, self.fs)
         
@@ -175,44 +164,30 @@ class Room_IR():
         N_start = np.argmax(np.abs(self.IR))
         N_correc = np.argwhere(np.abs(self.IR)>=0.1) # -20 dB 
         delta = N_start - N_correc[0]
-        while delta > 100:          # el inicio a menos de 100 muestras del máximo
+        while delta > 200:          # el inicio a menos de 200 muestras del máximo
             N_correc = N_correc[1:]
             delta = N_start - N_correc[0]
-            print(delta)
+            # print(delta)
         N_correc = int(N_correc[0])
         N_end = N_correc + int(T_end * self.fs)
         self.IR = self.IR[N_correc:N_end]
 
-        # self.IR = self.IR[Nstart:Nstart+Nend]
-        
-        # Filtra la señal entre las frecuencias extremo del sweep
-        # self.IR = funciones.filtro_pasabanda(self.IR, self.fstart, 
-                                                  # self.fend, self.fs)
-    
     def load_extIR(self, file):
         self.IR, self.fs = sf.read(file)
         
-        if self.IR.shape[1] > 1:
+        if self.IR.ndim > 1:
             self.is_binaural = True
             self.IR_L = self.IR[:, 0] # Left channel of the IR
             self.IR_R = self.IR[:, 1] # Right channel of the IR
             self.IR = (self.IR_L + self.IR_R) / 2 # Combine both channels
+            maxval = max(max(abs(self.IR_L)), max(abs(self.IR_R)))
+            self.IR_L /= maxval
+            self.IR_R /= maxval
+        self.IR /= max(abs(self.IR)) 
         
-        self.IR /= max(abs(self.IR))
-        
-        # Pase a decibeles
-        # self.IR_dB = funciones.a_dBFS(self.IR)
-        
-        # # Se encuentra el inicio del impulso y se descartan las muestras
-        # # anteriores
-        # Nstart = int(np.argwhere(self.IR_dB>=-20)[0])
-        # T_end = 5 # segundos
-        # Nend = int(T_end * self.fs)
-        
-        # self.IR = self.IR[Nstart:Nstart+Nend]
         
     
-    def smooth_energyc(self, IR, M=2400, mode=1):
+    def smooth_energyc(self, IR, M=2400, mode=0):
         
         IR_filt = abs(signal.hilbert(IR))  # Módulo de la transformada de Hilbert
         
@@ -221,8 +196,8 @@ class Room_IR():
         if M % 2 == 0: M+=1 # Ancho de ventana impar (no se si hace falta pero porlas)
         
         if mode == 0:
-            IR_filt = median_filter(IR_filt, M, mode='reflect')
-            # IR_filt = funciones.mediamovil_rcsv(IR_filt, M)
+            # IR_filt = median_filter(IR_filt, M, mode='nearest')
+            IR_filt = funciones.mediamovil_rcsv(IR_filt, M)
         elif mode == 1:
             IR_filt = signal.savgol_filter(IR_filt, M, 1)
         else:
@@ -232,7 +207,7 @@ class Room_IR():
         return funciones.a_dB(IR_filt)
 
         
-    def crosspoint_lundeby(self, Ec, ventanas=10):
+    def crosspoint_lundeby(self, Ec, impfilt, ventanas=10):
         '''
         Permite obtener el punto de cruce y la pendiente de decaimiento tardío.
 
@@ -254,7 +229,7 @@ class Room_IR():
         '''
         
         # 1) estimar ruido en el ultimo 10% de la señal
-        # noise = 20 * np.log10(funciones.rms(self.IR[int(0.9*self.IR.size):]))
+        # noise = 20 * np.log10(funciones.rms(impfilt[int(0.9*impfilt.size):]))
         noise = np.mean(Ec[int(0.9*Ec.size):]) # equivalente
 
         # 2) regresion lineal #1 desde 0 dB a noise + 5 dB
@@ -263,16 +238,25 @@ class Room_IR():
         p = funciones.cuad_min(t[:i_end], Ec[:i_end])
 
         reg1 = np.polyval(p, t)
-
+        
         # Punto de cruce premilinar es t[i_c]
         i_c = int(np.argwhere(reg1 >= noise)[-1])
+        
+        # print(noise, i_end, p, i_c)
+        # plt.figure()
+        # plt.plot(t, Ec, '-k', label='Energy')
+        # # plt.plot(t, reg1, '--m', label='Linreg')
+        # # plt.axhline(noise, label='noise')
+        # # plt.scatter(t[i_c], reg1[i_c])
+        # plt.grid()
+        # plt.legend()
 
         # 3) Filtro de media movil con 3 a 10 ventanas cada 10 dB de caida
         N = -10 * self.fs / p[0]  # cantidad de muestras para 10 dB de caída
         N = int(N // ventanas) # tamaño de ventanas
         if N%2 == 0: N += 1
-        # if N <= 1:
-        #     raise RuntimeError('Ventana muy chica')
+        if N <= 1:
+            raise RuntimeError('Ventana muy chica')
         # Ec2 = median_filter(Ec, N)
         # Ec2 = signal.savgol_filter(Ec, N, 1)
         Ec2 = funciones.mediamovil_rcsv(Ec, N)
@@ -287,21 +271,29 @@ class Room_IR():
         while delta > 0.01 and it < 10:
             
             noise2 = np.mean(Ec2[i_c2:]) # Ruido posterior al cruce
-            
+            # noise2 = 20 * np.log10(funciones.rms(impfilt[i_c2:]))
+            # print(i_c2, noise2)
             
             i_end2 = int(np.argwhere(Ec2 >= (noise2 + 5))[-1])
             i_start2 = int(np.argwhere(Ec2 >= (noise2 + 25))[-1])
-            
+            # print(i_end2, i_start2)
             # 5) Estimar pendiente desde 25 hasta 5 dB por sobre piso de ruido:
             
             p2 = funciones.cuad_min(t[i_start2:i_end2], Ec2[i_start2:i_end2])
             
             reg2 = np.polyval(p2, t)
+            # print(p2)
             i_c3 = int(np.argwhere(reg2 >= noise2)[-1]) # Nuevo PUNTO DE CRUCE
             
             delta = abs(t[i_c3] - t[i_c2])
             i_c2 = i_c3
             it +=1
+            
+            # plt.axhline(noise2, label='noise')
+            # plt.plot(t, reg2)
+            # plt.scatter(t[i_start2], Ec[i_start2])
+            # plt.scatter(t[i_end2], Ec[i_end2])
+            # plt.scatter(t[i_c2], reg1[i_c2])
             
         C = max(self.IR) * 10 ** (p[1] / 10) * np.exp(p[0]/10/np.log10(np.exp(1))*i_c2) / (
             -p[0] / 10 / np.log10(np.exp(1)))
@@ -347,7 +339,7 @@ class Room_IR():
         Ec = self.smooth_energyc(impfilt, M)
         
         if self.method == 0:
-            C, N_c = self.crosspoint_lundeby(Ec)
+            C, N_c = self.crosspoint_lundeby(Ec, impfilt)
             if not self.comp: C = 0
             return self.schroeder_int(impfilt, N_c, C), Ec, impfilt
         
@@ -386,6 +378,8 @@ class Room_IR():
             for i in range(len(frecs)):
                 finf = 2 ** (-1/6) * frecs[i]
                 fsup = 2 ** (1/6) * frecs[i]
+                if fsup >= fs:
+                    break
                 impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
@@ -397,6 +391,8 @@ class Room_IR():
             for i in range(len(frecs)):
                 finf = 2 ** (-1/2) * frecs[i]
                 fsup = 2 ** (1/2) * frecs[i]
+                if fsup >= fs/2:
+                    break
                 impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
@@ -418,10 +414,12 @@ class Room_IR():
           d["RT20"] = funciones.calc_RT20(smoothed_IR, self.fs)
           d["RT30"] = funciones.calc_RT30(smoothed_IR, self.fs)
           d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs) 
-          d["C50"], d["C80"] = funciones.c_parameters(self.IR, self.fs) 
+          d["C50"], d["C80"] = funciones.c_parameters(filtered_IR, self.fs)
+          # d["C50"] = funciones.calc_C50(self.IR, self.fs)
+          # d["C80"] = funciones.calc_C80(self.IR, self.fs)
           d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
           if self.is_binaural:
-              d["IACCEARLY"] = funciones.calc_IAC_early(self.IR_L, self.IR_R, self.fs)
+              d["IACCEARLY"] = funciones.calc_IACC_early(self.IR_L, self.IR_R, self.fs)
           return d
           
     def get_acparam(self, ETC):
