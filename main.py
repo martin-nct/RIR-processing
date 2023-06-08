@@ -6,9 +6,7 @@ Created on Mon Apr 24 12:36:57 2023
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.signal as signal
-from scipy.ndimage import median_filter
 import soundfile as sf
 import funciones
 
@@ -46,95 +44,90 @@ class Room_IR():
         signal_fft = np.fft.rfft(self.rec)
         inv_filt_fft = np.fft.rfft(inv_filt)
         
-        IR_fft = signal_fft * inv_filt_fft # Obtain the FFT of the impulse response
+        IR_fft = signal_fft * inv_filt_fft  # Obtain the FFT of the impulse response
         IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
         self.IR = IR / np.max(np.abs(IR))
-
-        # # Filtra la señal entre las frecuencias extremo del sweep
-        # self.IR = funciones.filtro_pasabanda(self.IR, f0, f1, self.fs)
         
-        # # return self.IR, self.fs
+    def get_valid_bands(self, filter):
         
-    def get_bandas_validez(self, filtro):
+        self.freq, self.spectrum_sw = funciones.spectrum(self.sweep, self.fs, dB=False)
         
-        self.freq, self.espectro_sw = funciones.espectro(self.sweep, self.fs, dB=False)
-        
-        if filtro == 0:
-            f_c = funciones.octavas()
-            octava = 1
+        if filter == 0:
+            f_c = funciones.octaves()
+            octave = 1
             
-        elif filtro == 1:
-            f_c = funciones.tercios()
-            octava = 3
+        elif filter == 1:
+            f_c = funciones.thirds()
+            octave = 3
         
-        nivel_x_banda = funciones.nivel_bandas(self.espectro_sw, f_c, 
-                                               self.freq, octava, False)
+        level_per_band = funciones.nivel_bandas(self.spectrum_sw, f_c, 
+                                               self.freq, octave, False)
         
-        fmax = np.argmax(nivel_x_banda)
-        self.f_validas = []
-        for i in range(len(nivel_x_banda)):
+        fmax = np.argmax(level_per_band)
+        self.valid_freqs = []
+        for i in range(len(level_per_band)):
                   
-        # Si el sweep inicia en 20 Hz y termina en 20 kHz, a razón
-        # de -10 dB/decada tiene una diferencia máxima de 30 dB entre extremos
+        # If the sweep starts at 20 Hz and ends at 20 kHz, with a rate
+        # of -10 dB/decade, it has a maximum difference of 30 dB between the extremes.
             
-            if nivel_x_banda[i] >= nivel_x_banda[fmax] - 32:
+            if level_per_band[i] >= level_per_band[fmax] - 32:
                 if f_c[i] >= fmax:
-        # Cae 3 dB por octava o 1 dB por tercio
-                    if (octava == 1) and (nivel_x_banda[i] >= (nivel_x_banda[i-1] - 4)):
-                        self.f_validas.append(f_c[i])
-                    elif (octava == 3) and (nivel_x_banda[i] >= (nivel_x_banda[i-1] - 1.5)):
-                        self.f_validas.append(f_c[i])
+        # It drops 3 dB per octave or 1 dB per third.
+                    if (octave == 1) and (level_per_band[i] >= (level_per_band[i-1] - 4)):
+                        self.valid_freqs.append(f_c[i])
+                    elif (octave == 3) and (level_per_band[i] >= (level_per_band[i-1] - 1.5)):
+                        self.valid_freqs.append(f_c[i])
             
-        while self.fstart > self.f_validas[0]:
-            self.f_validas.pop(0)
+        while self.fstart > self.valid_freqs[0]:
+            self.valid_freqs.pop(0)
 
     def get_inverse_filt(self):
         
-        self.freq, self.espectro_sw = funciones.espectro(self.sweep, self.fs, dB=True)
+        self.freq, self.spectrum_sw = funciones.spectrum(self.sweep, self.fs, dB=True)
         
-        # Debe encontrarse la duración del sweep sin el silencio final. Para ello
-        # se elige una ventana de 100 ms y se calcula el valor RMS en cada una
-        # para luego encontrar el silencio como la derivada (cambio abrupto de nivel)
-        tiempo_ventana = 0.1
-        RMS = funciones.rms_ventanas(self.sweep, self.fs, tiempo_ventana)
+        # The duration of the sweep without the final silence must be determined.
+        # To achieve this, a window of 100 ms is chosen, and the RMS value is calculated for each window.
+        # The silence is then identified as the derivative (abrupt change in level).
+
+        time_window = 0.1
+        RMS = funciones.rms_windows(self.sweep, self.fs, time_window)
         delta_RMS = RMS[:-1] - RMS[1:]
         
-        T_inv = (1 + np.argmax(delta_RMS)) * tiempo_ventana # Duracion del sweep
+        T_inv = (1 + np.argmax(delta_RMS)) * time_window # Sweep duration
         N_inv = int(T_inv * self.fs)
         
-        ifmax = np.argmax(self.espectro_sw)
+        ifmax = np.argmax(self.spectrum_sw)
         ifstart = 0
         
-        # Indice de la frecuencia de inicio del sweep. Encuentra la frecuencia
-        # en la cual la amplitud está 12 dB debajo del máximo (0 dB)
+        # Starting frequency index of the sweep.
+        # Finds the frequency at which the amplitude is 12 dB below the maximum (0 dB).
         
-        for i in range(self.espectro_sw.size):
+        for i in range(self.spectrum_sw.size):
             
-            if i < ifmax and self.espectro_sw[i] <= (self.espectro_sw[ifmax] - 12):
+            if i < ifmax and self.spectrum_sw[i] <= (self.spectrum_sw[ifmax] - 12):
                 
                 ifstart = i
         
-        # El espectro se puede simular con caída de 10 dB/decada desde la 
-        # frecuencia de inicio:
+       
+        # The spectrum can be simulated with a slope of 10 dB/decade starting from the initial frequency.
+        spectrum_sim = - 10 * np.log10(self.freq[ifmax:] / self.freq[ifmax])
         
-        espectro_sim = - 10 * np.log10(self.freq[ifmax:] / self.freq[ifmax])
+        delta = self.spectrum_sw[ifmax:] - spectrum_sim
         
-        delta = self.espectro_sw[ifmax:] - espectro_sim
-        
-        # Índice de Frecuencia máxima del sweep: primera muestra en la cual
-        # el sweep es 6 dB menor al simulado
+    
+        # Maximum frequency index of the sweep: the first sample at which the sweep is 6 dB lower than the simulated sweep.
         
         if np.argwhere(delta < -6).size > 0:
             ifend = int(np.argwhere(delta < - 6)[0])
         else:
-            ifend = self.freq[-1] # Si el sweep llegara hasta fs / 2 Hz
+            ifend = self.freq[-1] # If the sweep reached fs / 2 Hz.
         
         
         t = np.linspace(0, T_inv, N_inv, endpoint=False)
         self.fstart = self.freq[ifstart]
         self.fend = self.freq[ifend]
         
-        # Modulación de amplitud:
+        # Amplitude modulation:
         M = np.exp(-t * np.log(self.fend/self.fstart) / T_inv)
         
         self.inverse_filter = M * self.sweep[N_inv-1::-1]
@@ -152,22 +145,20 @@ class Room_IR():
             
             self.IR /= max(abs(self.IR))
             
-            # Pase a decibeles
+            # Convert to dB
             self.IR_dB = funciones.a_dBFS(self.IR)
 
     def IR_trim(self, T_end=None):
-        # Se encuentra el inicio del impulso y se descartan las muestras
-        # anteriores
+        # The start of the impulse is found and the previous samples are discarded.
         if T_end is None:
-            T_end = 5 # segundos
+            T_end = 5 # segs
             
         N_start = np.argmax(np.abs(self.IR))
         N_correc = np.argwhere(np.abs(self.IR)>=0.1) # -20 dB 
         delta = N_start - N_correc[0]
-        while delta > 200:          # el inicio a menos de 200 muestras del máximo
+        while delta > 200:          # The start is within 200 samples from the maximum.
             N_correc = N_correc[1:]
             delta = N_start - N_correc[0]
-            # print(delta)
         N_correc = int(N_correc[0])
         N_end = N_correc + int(T_end * self.fs)
         self.IR = self.IR[N_correc:N_end]
@@ -189,15 +180,14 @@ class Room_IR():
     
     def smooth_energyc(self, IR, M=2400, mode=0):
         
-        IR_filt = abs(signal.hilbert(IR))  # Módulo de la transformada de Hilbert
+        IR_filt = abs(signal.hilbert(IR))  # Hilbert Transform Module
         
-        if M is None:   # Si no se especifica ancho de ventana
-            M = 2 * int(self.fs/self.fstart) # Ancho de la ventana = 2 * minima frecuencia
-        if M % 2 == 0: M+=1 # Ancho de ventana impar (no se si hace falta pero porlas)
+        if M is None:   # If the window width is not specified.
+            M = 2 * int(self.fs/self.fstart) # Window width = 2 * minimum frequency
+        if M % 2 == 0: M+=1 # Odd window width
         
         if mode == 0:
-            # IR_filt = median_filter(IR_filt, M, mode='nearest')
-            IR_filt = funciones.mediamovil_rcsv(IR_filt, M)
+            IR_filt = funciones.maf_rcsv(IR_filt, M)
         elif mode == 1:
             IR_filt = signal.savgol_filter(IR_filt, M, 1)
         else:
@@ -207,62 +197,52 @@ class Room_IR():
         return funciones.a_dB(IR_filt)
 
         
-    def crosspoint_lundeby(self, Ec, impfilt, ventanas=10):
+    def crosspoint_lundeby(self, Ec, impfilt, windows=10):
         '''
-        Permite obtener el punto de cruce y la pendiente de decaimiento tardío.
+        Obtains the crossover point and the late decay slope.
 
         Parameters
         ----------
         Ec : 1darray
-            Curva de decaimiento energético, en dB.
-        ventanas : int, optional
-            Cantidad de ventanas por cada 10 dB de caída para el filtrado de Ec.
+            Energy decay curve, in dB.
+        windows : int, optional
+            Number of windows per 10 dB drop for filtering Ec.
             The default is 10.
 
         Returns
         -------
         slope : float
-            Pendiente tardía de decaimiento energético.
+            Late decay slope.
         i_c2 : int
-            Indice del punto de cruce, de forma tal que tc = t[i_c2].
+        Index of the crossover point, such that tc = t[i_c2]
 
         '''
         
-        # 1) estimar ruido en el ultimo 10% de la señal
-        # noise = 20 * np.log10(funciones.rms(impfilt[int(0.9*impfilt.size):]))
-        noise = np.mean(Ec[int(0.9*Ec.size):]) # equivalente
+        # 1)Estimate noise in the last 10% of the signal
+        
+        noise = np.mean(Ec[int(0.9 * Ec.size):]) # 
 
-        # 2) regresion lineal #1 desde 0 dB a noise + 5 dB
+        # 2) Linear regression #1 from 0 dB to noise + 5 dB
         t = np.arange(0, Ec.size/self.fs, 1/self.fs)
         i_end = int(np.argwhere(Ec > (noise + 10))[-1])
-        p = funciones.cuad_min(t[:i_end], Ec[:i_end])
+        p = funciones.least_squares(t[:i_end], Ec[:i_end])
 
         reg1 = np.polyval(p, t)
         
-        # Punto de cruce premilinar es t[i_c]
+        # Preliminary crossing point is t[i_c]
         i_c = int(np.argwhere(reg1 >= noise)[-1])
         
-        # print(noise, i_end, p, i_c)
-        # plt.figure()
-        # plt.plot(t, Ec, '-k', label='Energy')
-        # # plt.plot(t, reg1, '--m', label='Linreg')
-        # # plt.axhline(noise, label='noise')
-        # # plt.scatter(t[i_c], reg1[i_c])
-        # plt.grid()
-        # plt.legend()
-
-        # 3) Filtro de media movil con 3 a 10 ventanas cada 10 dB de caida
-        N = -10 * self.fs / p[0]  # cantidad de muestras para 10 dB de caída
-        N = int(N // ventanas) # tamaño de ventanas
+        # 3) Moving average filter with 3 to 10 windows for every 10 dB of decay
+        N = -10 * self.fs / p[0]  # Number of samples for a 10 dB decay
+        N = int(N // windows) # windows size
         if N%2 == 0: N += 1
         if N <= 1:
-            raise RuntimeError('Ventana muy chica')
-        # Ec2 = median_filter(Ec, N)
-        # Ec2 = signal.savgol_filter(Ec, N, 1)
-        Ec2 = funciones.mediamovil_rcsv(Ec, N)
+            raise RuntimeError('Too small window')
+
+        Ec2 = funciones.maf_rcsv(Ec, N)
 
         
-        # 4) Estimación de noise en un punto posterior a tc (5 - 10 dB), con 10% de señal
+        # 4) Noise estimation at a point after tc (5 - 10 dB), with 10% of the signal
         
         i_c2 = i_c
         delta = 1
@@ -270,30 +250,23 @@ class Room_IR():
         
         while delta > 0.01 and it < 10:
             
-            noise2 = np.mean(Ec2[i_c2:]) # Ruido posterior al cruce
-            # noise2 = 20 * np.log10(funciones.rms(impfilt[i_c2:]))
-            # print(i_c2, noise2)
+            noise2 = np.mean(Ec2[i_c2:]) # Post-crossover noise estimation
             
             i_end2 = int(np.argwhere(Ec2 >= (noise2 + 5))[-1])
             i_start2 = int(np.argwhere(Ec2 >= (noise2 + 25))[-1])
-            # print(i_end2, i_start2)
-            # 5) Estimar pendiente desde 25 hasta 5 dB por sobre piso de ruido:
             
-            p2 = funciones.cuad_min(t[i_start2:i_end2], Ec2[i_start2:i_end2])
+            # 5) Estimate slope from 25 to 5 dB above the noise floor.
+            
+            p2 = funciones.least_squares(t[i_start2:i_end2], Ec2[i_start2:i_end2])
             
             reg2 = np.polyval(p2, t)
-            # print(p2)
-            i_c3 = int(np.argwhere(reg2 >= noise2)[-1]) # Nuevo PUNTO DE CRUCE
+         
+            i_c3 = int(np.argwhere(reg2 >= noise2)[-1]) # New cross-point
             
             delta = abs(t[i_c3] - t[i_c2])
             i_c2 = i_c3
             it +=1
             
-            # plt.axhline(noise2, label='noise')
-            # plt.plot(t, reg2)
-            # plt.scatter(t[i_start2], Ec[i_start2])
-            # plt.scatter(t[i_end2], Ec[i_end2])
-            # plt.scatter(t[i_c2], reg1[i_c2])
             
         C = max(self.IR) * 10 ** (p[1] / 10) * np.exp(p[0]/10/np.log10(np.exp(1))*i_c2) / (
             -p[0] / 10 / np.log10(np.exp(1)))
@@ -302,24 +275,21 @@ class Room_IR():
 
     def schroeder_int(self, IR, N_c, C):
         '''
-        Obtiene la curva de decaimiento energético mediante la integral 
-        de Schroeder.
+        Obtains the energy decay curve using the Schroeder integral.
 
         Parameters
         ----------
         IR : 1d-array
-            Respuesta al impulso del recinto.
-        
+            Room impulse response.
         N_c : int
-            Índice del punto de cruce.
-        
+            Index of the crossover point.
         C : float
-            Compensación de ruido de Lundeby.
-        
+            Lundeby noise compensation.
+
         Returns
         -------
         array
-            Curva de decaimiento energético.
+            Energy decay curve.
 
         '''
         IR = IR ** 2
@@ -328,13 +298,26 @@ class Room_IR():
         return 10 * np.log10(sch[::-1])
     
     def get_ETC(self, impfilt, fs, frec):
-        
+        """
+        Calculates the Energy-Time Curve (ETC) for a given impulse response.
+
+        Args:
+        impfilt (array-like): The impulse response.
+        fs (float): The sampling frequency in Hz.
+        frec (float): The center frequency in Hz.
+
+        Returns:
+        tuple: A tuple containing the following:
+            - ETC (array-like): The Energy-Time Curve.
+            - Ec (array-like): The smoothed energy curve.
+            - impfilt (array-like): The impulse response.
+        """
         if frec <= 40: 
             M = int(self.fs / 20)
         elif frec >= 8000:
             M = int(self.fs / 4000)
         else:
-            M = 2 * int(self.fs / frec) # Ventana igual a 2 períodos de la frecuencia central
+            M = 2 * int(self.fs / frec) # Window equal to 2 periods of the center frequency
         
         Ec = self.smooth_energyc(impfilt, M)
         
@@ -346,54 +329,33 @@ class Room_IR():
         if self.method == 1:
             return Ec, impfilt
     
-    def calcula_ETC(self, param, imp, fs, filtro=0, N=5, reverse=0):
-        '''
-        Calcula el parámetro 'param' para una señal por octavas o tercios
-        de octava.
-
-        Parameters
-        ----------
-        param : function
-            función que calcula el parámetro. Debe ser del tipo f(x, fs).
-        imp : 1darray
-            señal a procesar. Típicamente una respuesta al impulso.
-        fs : int
-            Frecuencia de muestreo de imp.
-        filtro : str, optional
-            Tipo de filtro a aplicar. Si filtro='octavas', calcula por octavas, 
-            si es 'tercios', por tercios. The default is 'tercios'.
-
-        Returns
-        -------
-        salida : list
-            lista con los parámetros calculados para cada banda.
-
-        '''
+    def calcula_ETC(self, param, imp, fs, filter=0, N=5, reverse=0):
+       
         if reverse == 1:
             imp = np.flip(imp)
         
-        if filtro == 1: # tercios
+        if filter == 1: # thirds
             salida = []
-            frecs = funciones.tercios()
+            frecs = funciones.thirds()
             for i in range(len(frecs)):
                 finf = 2 ** (-1/6) * frecs[i]
                 fsup = 2 ** (1/6) * frecs[i]
                 if fsup >= fs:
                     break
-                impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
+                impfilt = funciones.bandpass_filter(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
                 salida.append(param(impfilt, fs, frecs[i]))
             return salida
-        elif filtro == 0 :  # octavas
+        elif filter == 0 :  # octaves
             salida = []
-            frecs = funciones.octavas()
+            frecs = funciones.octaves()
             for i in range(len(frecs)):
                 finf = 2 ** (-1/2) * frecs[i]
                 fsup = 2 ** (1/2) * frecs[i]
                 if fsup >= fs/2:
                     break
-                impfilt = funciones.filtro_pasabanda(imp, finf, fsup, fs, N)
+                impfilt = funciones.bandpass_filter(imp, finf, fsup, fs, N)
                 if reverse == 1:
                     impfilt = np.flip(impfilt)
                 salida.append(param(impfilt, fs, frecs[i]))
@@ -415,8 +377,6 @@ class Room_IR():
           d["RT30"] = funciones.calc_RT30(smoothed_IR, self.fs)
           d["EDT"] = funciones.calc_EDT(smoothed_IR, self.fs) 
           d["C50"], d["C80"] = funciones.c_parameters(filtered_IR, self.fs)
-          # d["C50"] = funciones.calc_C50(self.IR, self.fs)
-          # d["C80"] = funciones.calc_C80(self.IR, self.fs)
           d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
           if self.is_binaural:
               d["IACCEARLY"] = funciones.calc_IACC_early(self.IR_L, self.IR_R, self.fs)
@@ -433,7 +393,7 @@ class Room_IR():
                 schr.append(ETC[i][0])
                 mmfilt.append(ETC[i][1])
                 results.append(self.acoustical_parameters(schr[i], ETC[i][2]))
-            # mmfilt = np.array(mmfilt)
+            
         
         elif self.method == 1:
             for i in range(len(ETC)):

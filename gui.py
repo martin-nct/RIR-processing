@@ -168,16 +168,16 @@ class SetUpWindow(QWidget, Room_IR):
     def open_main(self):
 
         if self.rb_octave.isChecked():
-            filtro = 0
+            filter = 0
         elif self.rb_third.isChecked():
-            filtro = 1
+            filter = 1
         
         if self.rb_sch.isChecked():
             self.method = 0 # Schroeder reverse time integral 
         elif self.rb_mavg.isChecked():
             self.method = 1 # Moving Average Filter
         
-        # Arroja resultados insactifactorios:
+        # Yields wrong results:
         # if self.reverse.isChecked():
         #     reverse = 1
         # else: reverse = 0
@@ -187,10 +187,10 @@ class SetUpWindow(QWidget, Room_IR):
         else: self.comp = 0
         
         if self.from_RIR.isChecked():
-            if filtro == 0:
-                self.f_validas = funciones.octavas()
-            elif filtro == 1:
-                self.f_validas = funciones.tercios()
+            if filter == 0:
+                self.valid_freqs = funciones.octaves()
+            elif filter == 1:
+                self.valid_freqs = funciones.thirds()
         
         else:
 
@@ -206,16 +206,16 @@ class SetUpWindow(QWidget, Room_IR):
                 self.get_inverse_filt()
                 self.linear_convolve()
             
-            self.get_bandas_validez(filtro)
+            self.get_valid_bands(filter)
         
         self.IR_trim()
             
-        ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filtro)
+        ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filter)
         
         self.results, self.schroeder, self.mmfilt = self.get_acparam(ETC)
         
         self.ResultW = ResultWindow(self.results, self.schroeder, 
-                                    self.mmfilt, self.fs, filtro, self.f_validas)
+                                    self.mmfilt, self.fs, filter, self.valid_freqs)
         self.ResultW.show()
         self.ResultW.resize(1100, 680)
         self.ResultW.move(123, 47)
@@ -223,14 +223,14 @@ class SetUpWindow(QWidget, Room_IR):
         self.hide()
         
     def load_sweep(self):
-        filtro = 'WAV (*wav);;FLAC (*flac)'
-        ruta = QFileDialog.getOpenFileName(filter=filtro)[0]
+        filter = 'WAV (*wav);;FLAC (*flac)'
+        ruta = QFileDialog.getOpenFileName(filter=filter)[0]
         if ruta != '':
             self.sweep, self.fs = sf.read(ruta)
     
     def load_recording(self):
-        filtro = 'WAV (*wav);;FLAC (*flac)'
-        ruta = QFileDialog.getOpenFileName(filter=filtro)[0]
+        filter = 'WAV (*wav);;FLAC (*flac)'
+        ruta = QFileDialog.getOpenFileName(filter=filter)[0]
         if ruta != '':
             if self.from_RIR.isChecked():
                 self.load_extIR(ruta)
@@ -239,17 +239,17 @@ class SetUpWindow(QWidget, Room_IR):
 
 
 class ResultWindow(QWidget):
-    def __init__(self, results, schroeder, mmfilt, fs, filtro, f_validas):
+    def __init__(self, results, schroeder, mmfilt, fs, filter, valid_freqs):
         super().__init__(windowTitle = 'RIR Processor by G. Caminos & M. Nocito - Room Impulse Response')
         
         self.results = results
         self.schroeder = schroeder
         self.mmfilt = mmfilt
         self.fs = fs
-        self.filtro = filtro
-        self.f_validas = f_validas
+        self.filter = filter
+        self.valid_freqs = valid_freqs
         
-        # Gráfico
+        # Graph
         
         self.t = np.arange(0, self.mmfilt[0].size/self.fs, 1/self.fs)
         
@@ -286,7 +286,7 @@ class ResultWindow(QWidget):
         self.linea_EDC.axes.set_xlim(self.t[0], self.t[-1])
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
-        label = funciones.labels_bandas(self.filtro, True)[5]
+        label = funciones.labels_bands(self.filter, True)[5]
         self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})', color="#FFF")
         
         self.linea_EDC.figure.canvas.draw()
@@ -295,11 +295,11 @@ class ResultWindow(QWidget):
         self.save_gr = QPushButton('Save Graph')
         self.save_gr.clicked.connect(self.save_graph)
         
-        # Tabla
+        # Table
         self.tableWidget = QTableWidget(7, 11)
         self.tableWidget.setBaseSize(100, 100)
         self.tableWidget.cellClicked.connect(self.clicked_cell)
-        self.config_table(self.results, self.filtro)
+        self.config_table(self.results, self.filter)
         
         self.save_tab = QPushButton('Save Data')
         self.save_tab.clicked.connect(self.save_data)
@@ -334,30 +334,30 @@ class ResultWindow(QWidget):
         
         
         
-    def config_table(self, data, filtro):
+    def config_table(self, data, filter):
         
         numcols = len(data)
         numrows = len(data[0])
         self.tableWidget.setColumnCount(numcols)
         self.tableWidget.setRowCount(numrows)
         self.tableWidget.setVerticalHeaderLabels((list(data[0].keys())))
-        freqs = funciones.labels_bandas(filtro, Hz=True)
+        freqs = funciones.labels_bands(filter, Hz=True)
         self.tableWidget.setHorizontalHeaderLabels(freqs)
         for column in range(numcols):
             for row in range(numrows):
                 item = str(list(data[column].values())[row])
                 self.tableWidget.setItem(row, column, QTableWidgetItem(item))
         
-        #Colorea las columnas (bandas) en las cuales no es válido el resultado
+        #Color the columns (bands) in which the result is not valid.
         
-        if filtro == 0:
-            center = funciones.octavas()
-        elif filtro == 1:
-            center = funciones.tercios()
+        if filter == 0:
+            center = funciones.octaves()
+        elif filter == 1:
+            center = funciones.thirds()
         
         for i, f in enumerate(center):
             
-            if f not in self.f_validas:
+            if f not in self.valid_freqs:
                 self.set_column_color(i, QColor(255, 0, 0, 127))
         
     def set_column_color(self, column, color):
@@ -373,7 +373,7 @@ class ResultWindow(QWidget):
         self.linea_EDC.set_ydata(self.mmfilt[column])
         self.linea_EDC.axes.set_ylim(min(self.mmfilt[5])-5, 1)
         
-        label = funciones.labels_bandas(self.filtro, True)[column]
+        label = funciones.labels_bands(self.filter, True)[column]
         self.linea_EDC.axes.set_title(f'Energy Time Curve ({label})', color="#FFF")
         
         self.linea_EDC.figure.canvas.draw()
@@ -395,7 +395,7 @@ class ResultWindow(QWidget):
             data = np.zeros((numrows+1, numcols+1), dtype='<U9')
     
             data[0, 0] = 'Freq [Hz]'
-            data[0, 1:] = funciones.labels_bandas(self.filtro)
+            data[0, 1:] = funciones.labels_bands(self.filter)
     
             for row in range(numrows):
                 for column in range(numcols+1):

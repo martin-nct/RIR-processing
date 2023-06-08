@@ -1,104 +1,47 @@
 # coding: utf-8
 
 
-# Funciones útiles
+# Useful functions
 
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.signal as sig
-import soundfile as sf
-from numpy.linalg import inv
-from scipy.ndimage import median_filter
 
 # =============================================================================
-# PLOTEO
+# PLOTTING
 # =============================================================================
 
-def plot_sig(x, fs=1, title='Señal temporal'):
+    
+def labels_bands(filter=0, Hz = False):
     """
-    Grafica una señal en el dominio temporal. 
+    Generates labels for frequency bands.
 
     Parameters
     ----------
-    x : 1darray
-        array de una dimensión que se desea graficar.
-    fs : int, opcional
-        frecuencia de muestreo de x. Por defecto es 1.
-    title : str, opcional
-        el título del plot. Por defecto es 'Señal temporal'.
+    filter : int, optional
+        Filter type to determine the frequency bands. 
+        0 for octave filter, 1 for one-third octave filter.
+        Default is 0.
+    Hz : bool, optional
+        Determines if the labels should include the 'Hz' unit.
+        If True, labels will include 'Hz'; if False, labels will not include 'Hz'.
+        Default is False.
 
     Returns
     -------
-    Figure : 
-        Gráfico 2D de x.
+    labels : list
+        List of labels for the frequency bands.
+
+    Notes
+    -----
+    The function generates labels for frequency bands based on the specified filter type.
+    If `filter` is 0, the labels are generated for octave filter bands.
+    If `filter` is 1, the labels are generated for one-third octave filter bands.
+    The labels can include the 'Hz' unit if `Hz` is set to True.
     """
-    
-    t = np.linspace(0, x.size/fs, x.size)
-    plt.figure(figsize=(16,7))
-    plt.plot(t, x)
-    plt.title(title)
-    plt.xlabel('Tiempo[s]')
-    plt.ylabel('Amplitud')
-    plt.grid()
-    plt.show()
 
-def plot_espectro(x, fs, dB=False, title='Espectro', stem=False):
-    
-    freq, X = espectro(x, fs, dB)
-    
-    fig, ax = plt.subplots()
-    
-    if stem:
-        ax.stem(freq, X)
-    else:
-        ax.semilogx(freq, X, '-r')
-    ax.set_title(title)
-    ax.set_xlabel('Frecuencia (Hz)')
-    ax.set_ylabel('Amplitud')
-    ax.set_xticks()
-    
-
-def ticks_bandas(tipo='tercios', paso=3):
-    '''
-    Genera los ticks para un gráfico con eje frecuencial.
-
-    Parameters
-    ----------
-    tipo : str, optional
-        Bandas de octava o tercios de octava. The default is 'tercios'.
-    paso : int, optional
-        Espaciado entre ticks. The default is 3.
-
-    Returns
-    -------
-    ticks : list
-        Contiene los ticks para el gráfico.
-
-    '''
-    if tipo == 'tercios':
-        freqs = tercios()
-        labels = freqs[::paso]
-        ticks = []
-        for i in range(len(freqs)):
-            if freqs[i] in labels:
-                ticks.append(freqs[i])
-            else: ticks.append('')
-        return ticks
-    elif tipo == 'octavas':
-        freqs = octavas()
-        labels = freqs[::paso]
-        ticks = []
-        for i in range(len(freqs)):
-            if freqs[i] in labels:
-                ticks.append(freqs[i])
-            else: ticks.append('')
-        return ticks
-    
-def labels_bandas(filtro=0, Hz = False):
-    
-    if filtro == 0: # Filtro de octavas
+    if filter == 0: # Octaves filter
         center = ['31.5', '63', '125', '250', '500', '1 k', '2 k', '4 k', '8 k', '16 k']
-    if filtro == 1: # Filtro de tercios de octava
+    if filter == 1: # Third octaves filter
         center = ['25', '31.5', '40', '50', '63', '80', '100', '125', '160', '200', 
                   '250', '315','400', '500', '630', '800', '1 k', '1.25 k', '1.6 k', 
                   '2 k', '2.5 k', '3.15 k', '4 k', '5 k', '6.3 k', '8 k', '10 k', 
@@ -111,257 +54,29 @@ def labels_bandas(filtro=0, Hz = False):
     else:
         return center
 
-def plot_Leq(SPL_bandas):
-    # Formato para el eje de frecuencia:
-    xticks = ticks_bandas()
-    
-    fig, ax = plt.subplots(figsize=(10,5))
-    
-    ax.bar(range(len(SPL_bandas)), SPL_bandas, color='b', edgecolor='k', 
-            linewidth=1, tick_label=xticks)
-    
-    ax.set_xlabel('Frecuencia (Hz)')
-    ax.set_ylabel(r'$L_{eq}$(dB SPL)')
-    ax.set_title('Ruido de fondo')
-    ax.grid(axis='y')
-    
-
-def polosyceros(b,a, lim=1.1):
-    '''
-    Grafica polos y ceros.
-    
-    Devuelve un gráfico de polos y ceros y sus valores a partir de los
-    coeficientes de la función de transferencia. Los coeficientes deben
-    estar ordenados en potencias decrecientes de z.
-    
-    Parameters
-    ----------
-    b : array-like, list 
-        Coeficientes del numerador de la función de transferencia H(z) ordenados
-        en potencias decrecientes de z.
-    a : array-like, list
-        Coeficientes del denominador de la función de transferencia H(z) ordenados
-        en potencias decrecientes de z.
-    lim : float, opcional
-        límites del gráfico. Por defecto es 1.1. El gráfico tendrá las mismas
-        proporciones en ambos ejes.
-    
-    Returns
-    -------
-    Figure:
-        Gráfico 2D
-    Print:
-        Polos y ceros.
-    '''
-    z, p, k = sig.tf2zpk(b, a)
-    print('Ceros:', np.around(z,5))
-    print('Polos:', np.around(p,5))
-    tita = np.linspace(0,2*np.pi, 100)
-    x = np.cos(tita)
-    y = np.sin(tita)
-
-    plt.figure(figsize=(7,7))
-    plt.plot(x, y, '--k')
-    for i in z:
-        plt.scatter(i.real,i.imag, c='b', marker='o')
-    for i in p:
-        plt.scatter(i.real, i.imag, c='r', marker='x')
-    plt.grid(linestyle='--')
-    plt.xlabel('Re{z}')
-    plt.ylabel('Im{z}')
-    plt.title('Diagrama de Polos y Ceros')
-    plt.xlim([-lim,lim])
-    plt.ylim([-lim,lim])
-    plt.show()
-    
-def plot_impz(b, a = 1, l=100):
-    """
-    Grafica la respuesta al impulso de una función de transferencia.
-
-    Parameters
-    ----------
-    b : numpy array o int
-        numerador de la función de transferencia en potencias decrecuentes 
-        negativas de z        
-    a : numpy array o int, optional
-        denominador de la función transferencia. The default is 1.
-    l : int, optional
-        cantidad de muestras del impulso. The default is 100.
-
-    Returns
-    -------
-    None.
-
-    """
-    if type(a)== int: #FIR
-        l = len(b)
-    else: # IIR
-        l = 500
-    impulse = np.repeat(0.,l)
-    impulse[0] =1.
-    x = np.arange(0,l)
-    response = sig.lfilter(b, a, impulse)
-    plt.plot(x, response); plt.grid()
-    plt.ylabel('Amplitud')
-    plt.xlabel('n (muestras)')
-    plt.title('Respuesta al Impulso')
-    
-def plot_impz_sos(sos, l=100, filtfilt=True, plot=True):
-    '''
-    Impulse response of a sos digital filter.
-
-    Parameters
-    ----------
-    sos : array
-        Second Order Section coefficients of the digital filter.
-    l : int, optional
-        Length for the dirac signal. The default is 100.
-    filtfilt : bool, optional
-        Wether the filter is forward-backward applied or not. The default is True.
-    plot : bool, optional
-        If True, plots de impulse response. The default is True.
-
-    Returns
-    -------
-    response : array
-        Impulse response of the filter.
-
-    '''
-    impulse = np.repeat(0.,l)
-    impulse[0] =1.
-    x = np.arange(0,l)
-    if filtfilt:
-        response = sig.sosfiltfilt(sos, impulse)
-    else:
-        response = sig.sosfilt(sos, impulse)
-    if plot:
-        plt.figure()
-        plt.plot(x, response)
-        plt.grid()
-        plt.ylabel('Amplitud')
-        plt.xlabel('n (muestras)')
-        plt.title('Respuesta al Impulso')
-    
-    return response
-
-def plot_magyfas(w, H, l=15, a=5):
-    """
-    Grafica magnitud y fase de una fft.
-
-    Parameters
-    ----------
-    w : numpy array
-        eje de frecuencias.
-    H : numpy array
-        transformada de Fourier de una señal.
-    l : int, optional
-        ancho de la figura. The default is 15.
-    a : int, optional
-        alto de la figura. The default is 5.
-
-    Returns
-    -------
-    None.
-
-    """
-    H_mag = np.abs(H)
-    H_fase = np.angle(H)
-
-    plt.figure(1, figsize=(l,a))
-    plt.plot(w, H_mag, 'r')
-    plt.title('Magnitud de H(w)')
-    plt.xlabel('Frecuencia (rad/s)')
-    plt.ylabel('Magnitud')
-    plt.grid()
-    plt.show()
-
-    plt.figure(1, figsize=(l,a))
-    plt.plot(w, H_fase, 'g')
-    plt.title('Fase de H(w)')
-    plt.xlabel('Frecuencia (rad/s)')
-    plt.ylabel('Fase (rad/s)')
-    plt.grid()
-    plt.show()
-
-
-def plot_stft(STFT, fs, T, title='STFT'):
-
-    '''
-    Grafica una STFT.
-    
-    Devuelve un plot donde el eje horizontal es el tiempo y
-    el eje vertical es la frecuencia. La amplitud se representa
-    con pseudocolor cmap = 'magma'.
-    
-    Parameters
-    ----------
-    STFT: list
-        Lista con la STFT a graficar
-    fs: int
-        Frecuencia de muestreo de la señal
-    T: float
-        Duración en segundos de la señal
-    title: str, opcional
-        Título del gráfico. Por defecto "'STFT'"
-    '''
-
-    STFT_MAG = np.asarray(np.abs(STFT))
-    f = np.linspace(0, fs/2, STFT_MAG.shape[1])
-    t = np.linspace(0, T, STFT_MAG.shape[0])
-    plt.figure(1,figsize=(20,10))
-    plt.pcolormesh(t, f, STFT_MAG.T, cmap='magma')
-    plt.ylabel('Frecuencia (Hz)')
-    plt.xlabel('Tiempo (s)')
-    plt.title(title)
-    plt.show()
-    
-def plot_stft2(STFT, f, t, title='STFT'):
-    
-    '''
-    Grafica la STFT. Utilizar para STFT calculada con la función de scipy.
-    
-    Devuelve un plot donde el eje horizontal es el tiempo y
-    el eje vertical es la frecuencia. La amplitud se representa
-    con pseudocolor cmap = 'magma'.
-    
-    Parameters
-    ----------
-    STFT: 2Darray
-        Array con la STFT a graficar
-    f: array
-        Eje frecuencial
-    t: array
-        Eje temporal
-    title: str
-        Título del gráfico. Por defecto 'STFT'
-    '''
-    plt.figure(1,figsize=(20,10))
-    plt.pcolormesh(t, f, np.abs(STFT), cmap='magma')
-    plt.ylabel('Frecuencia (Hz)')
-    plt.xlabel('Tiempo (s)')
-    plt.title(title)
-    plt.show()
-
-
 # =============================================================================
 # FOURIER
 # =============================================================================
 
-def espectro(x, fs, dB=False):
-    '''
-    Transformada de Fourier de x. 
-
+def spectrum(x, fs, dB=False):
+    """
     Parameters
     ----------
     x : array
+        Input array.
     fs : int
-    dB : bool, optional. The default is False.
+        Sampling frequency.
+    dB : bool, optional
+        If True, the output X is in decibels (dB). Default is False.
 
     Returns
     -------
     freq : array
+        Array of frequencies.
     X : array
-    '''
+        Fourier transformed array.
+    """
+
     X = np.fft.rfft(x)
     X = np.abs(X)
     X /= max(X)
@@ -373,184 +88,66 @@ def espectro(x, fs, dB=False):
     return freq, X
 
 
-def stft(x,fs,largo,solap):
-    '''
-    Calcula la STFT de una señal.
-    
-    Subdivide la señal y la multiplica por ventanas de tipo Hann, 
-    aplica la FFT a cada ventana y devuelve información tiempo-frecuencia
-    de la señal original.
-    
-    Parameters
-    ----------
-    x: 1darray
-        señal temporal
-    fs: int
-        frecuencia de sampleo
-    largo: float
-        duración de cada ventana en segundos
-    solap: float
-        superposicion entre ventanas en segundos
-    
-    Returns
-    -------
-    X: list
-        STFT de la señal. 
-    '''
-    N = int(largo*fs)     # Largo de ventana en muestras
-    P = int(solap*fs)      # Paso en muestras
-    n = np.arange(N)
-    hann = 0.5 - 0.5*np.cos(2*np.pi*n/N)    # Ventana Hann
-    X = []
-    for i in range(0,x.size-N, P):
-        y = x[i:i+N]*hann
-        Y = np.fft.rfft(y)
-        X.append(Y)
-    return X
-
-def ssf(x, fs, largo=0.01, solap=None, silencio=0.3, b=1):
-    
-    '''
-    Reducción de ruido por substracción espectral.
-    
-    Aplica reducción de ruido por el método de substracción espectral a una señal.
-    Requiere que la señal no tenga información útil en el inicio. Procesa la señal
-    con reducción de ruido residual.
-    
-    Parameters
-    ----------
-    x: 1darray 
-        Señal a filtrar
-    fs: int 
-        Frecuencia de muestreo
-    largo: float, opcional
-        Longitud en segundos de la ventana para realizar la STFT. Por defecto largo = 0.01 seg
-    solap: float, opcional
-        El solapamiento en segundos entre ventana y ventana en la STFT. Por defecto es la mitad del largo. Debe ser menor
-        al largo.
-    silencio: float, opcional
-        Tiempo en segundos al inicio de la señal donde se estimará el ruido. Se requiere que no haya información útil.
-    b: float, opcional
-        Parámetro de sobre-sustracción. Usualmente 1<b<2. Por defecto b=1.
-    
-    Returns
-    -------
-    tiempo: array
-        Vector de tiempo de la señal
-    salida: array
-        Señal filtrada
-    '''
-    
-    if solap != None:
-        solap = int(solap*fs)    # Pone el paso en muestras
-    f, t, X = sig.stft(x, fs, nperseg=int(largo*fs), noverlap=solap)    # Calcula STFT
-    X = X.T    # Trasponer la matriz
-    
-    ventanas = []
-    fases = []
-    for i in range(len(X)):
-        ventanas.append(np.abs(X[i]))
-        fases.append(np.angle(X[i]))
-    
-    ruido = np.array(ventanas[0])
-    muestras = int(silencio * fs)    # Cantidad de muestras sin señal útil
-    M = int(muestras/len(ventanas[0]))
-    
-    for i in range(1,M):
-        ruido += ventanas[i]
-    ruido /= M    # Estimador de ruido
-    
-    ruido *= b    # Oversubstract
-    
-    for i in range(len(ventanas)):
-        for k in range(len(ventanas[i])):
-            if ventanas[i][k] > ruido[k]:
-                ventanas[i][k] -= ruido[k]
-            else: ventanas[i][k] = 0
-    
-    # Reducción de ruido residual:
-    
-    maxres = ventanas[0]            
-    for i in range(1,M):
-        for k in range(len(ventanas[i])):
-            if ventanas[i][k] > maxres[k]:
-                maxres[k] = ventanas[i][k]    # Selecciona las magnitudes máximas en el silencio inicial luego de la substracción
-    
-    for i in range(1,len(ventanas)-1):
-        for k in range(len(ventanas[i])):
-            if ventanas[i][k] < maxres[k]:
-                ventanas[i][k] = min(ventanas[i+1][k], ventanas[i][k], ventanas[i-1][k])
-                # Elige el valor mínimo en ventanas adyacentes para esa frecuencia
-    
-    
-    out = []
-    for i in range(len(ventanas)):
-        out.append(ventanas[i] * np.exp(1j*fases[i]))    # Agregamos la magnitud y la fase
-    out = np.asarray(out)
-    
-    tiempo, salida = sig.istft(out.T,fs, noverlap=solap)     # Antitransformamos
-    return tiempo, salida
-
 # =============================================================================
-# AJUSTES Y ANÁLISIS
+# ADJUSTMENTS AND ANALYSIS
 # =============================================================================
 
-def SNR(x, sigma=None, inicio=0, fin=100):
-    '''
-    Calcula la relación señal a ruido (SNR).
-    
-    Calcula la SNR de una señal con media 0según una porción
-    de señal donde se estima la desviación estandar. Se define como:
-    SNR = RD{|x|}/sigma donde RD es el rango dinámico.
-    
-    Parameters
-    ----------
-    x : 1darray 
-        Señal a calcular SNR.
-    sigma : float
-        Desviación estandar del ruido. Por defecto es None
-    inicio : int, opcional
-        index desde el cual se calcula la desviación estándar. Por defecto es 0.
-    fin : int, opcional
-        index hasta el cual se calcula la desviación estándar. Por defecto es 100.
-    
-    Returns
-    -------
-    SNR: float
-        Relación señal a ruido de x.    
-    '''
-    if sigma==None:
-        sigma = np.std(x[inicio:fin])
-    return np.around((np.max(abs(x)) - np.min(abs(x))) / sigma, 3)
 
 def zero_padding(x, N):
     if x.ndim == 1: # Vector
         ceros = np.zeros(N)
         return np.hstack([x, ceros])
-    elif x.ndim == 2 and x.shape[1] == 2: # Señal estereo 
+    elif x.ndim == 2 and x.shape[1] == 2: # Stereo signal
         ceros = np.zeros([N, 2])
         return np.vstack([x, ceros])
-
+    
 def rms(x):
-    '''
-    Calcula el valor eficaz de una señal.
 
+    """
+    Calculates the root mean square (RMS) value of a signal.
     Parameters
     ----------
     x : array-like
-        Señal a calcular el valor RMS.
+        Signal to calculate the RMS value.
 
     Returns
     -------
     float
-        Valor RMS.
+        RMS value.
 
-    '''
+    """
+    
     return np.sqrt(np.mean(x**2))
 
-def rms_ventanas(x, fs, tiempo_ventana):
-    
-    W = int(tiempo_ventana * fs)
+def rms_windows(x, fs, time_window):
+    """
+    Calculates the root mean square (RMS) value of signal segments.
+
+    Parameters
+    ----------
+    x : array-like
+        Input signal.
+    fs : int or float
+        Sampling frequency of the signal.
+    time_window : float
+        Length of each segment in seconds.
+
+    Returns
+    -------
+    result : array
+        Array of RMS values for each segment.
+
+    Notes
+    -----
+    The function calculates the RMS value of signal segments with a specified time window.
+    The input signal `x` is divided into segments of length `time_window` seconds.
+    If the length of the input signal is not divisible by the segment length, zero-padding is applied.
+    The RMS value is calculated for each segment, and the results are returned as an array.
+    The last segment might have a different length if the input signal size is not divisible by `time_window`.
+    The sampling frequency `fs` is used to determine the segment length in samples.
+    """
+
+    W = int(time_window * fs)
     N = x.size
     x_original = x
     
@@ -559,186 +156,134 @@ def rms_ventanas(x, fs, tiempo_ventana):
         x = zero_padding(x, ceros)
         N = x.size
     
-    Nvent = N // W
-    result = np.zeros(Nvent)
+    Nwin = N // W
+    result = np.zeros(Nwin)
     
-    for i in range(Nvent):
+    for i in range(Nwin):
         result[i] = rms(x[W*i:W*(i+1)])
     
-    result[-1] = rms(x_original[W*(Nvent-1):])
+    result[-1] = rms(x_original[W*(Nwin-1):])
     return result
 
-def cuad_min2(datos_x,datos_y,n=1):
-    n += 1
-    k = len(datos_x)
-    A = (np.ones([k, n]) * datos_x[:, np.newaxis]) ** np.arange(0, n)
-    coef = inv(A.T @ A) @ A.T @ datos_y[:,np.newaxis]
-    return coef[::-1].T[0,:]
 
-def cuad_min(x, y, n=1):
+def least_squares(x, y, n=1):
+    """
+    Performs a least squares fit of a polynomial function to the given data points.
+
+    Parameters
+    ----------
+    x : array-like
+        Input array representing the x-coordinates of the data points.
+    y : array-like
+        Input array representing the y-coordinates of the data points.
+    n : int, optional
+        Degree of the polynomial to fit. Default is 1 (linear).
+
+    Returns
+    -------
+    p : array
+        Coefficients of the polynomial fit.
+    """
     A = np.vstack([x, np.ones(len(x))]).T
     p = np.linalg.lstsq(A, y, rcond=None)[0]
     return p
 
-def error_cuadratico_medio(u, v):
-    """
-    Devuelve el error cuadrático medio entre dos arrays u y v.
-    """
-    return np.mean((u - v) ** 2)
-
 # =============================================================================
-# FILTRADO
+# FILTERS
 # =============================================================================
     
-def suavizado(f, amp, octava):
+
+
+def butter_bandpass(N, flow, fhigh, fs):
     """
-    Realiza un filtrado por bandas.
+    Returns the second-order section (SOS) coefficients of a Butterworth bandpass filter.
 
     Parameters
     ----------
-    f : numpy array
-        eje de frecuencias
-    amp : numpy array
-        amplitudes en dB
-    octava : int
-        fracción de octava en la cual se realiza el filtrado. p.ej. octava = 3
-        resulta en un filtrado de 1/3 de octava. Si es 0, no hay filtrado
+    N : int
+        Order of the filter.
+    flow : float
+        Lower cutoff frequency of the bandpass filter.
+    fhigh : float
+        Upper cutoff frequency of the bandpass filter.
+    fs : float
+        Sampling frequency.
 
     Returns
     -------
-    ampsmooth : numpy array
-        señal suavizada
-
+    sos : array
+        Second-order section (SOS) coefficients of the Butterworth bandpass filter
     """
-    ampsmooth = amp
-    if octava != 0:     # Posibilidad de no filtrar con octava = 0
-        for n in range(f.size):
-            finf = f[n] * 2 ** (-1/(2*octava))  # Calcula frecuencia superior
-            fsup = f[n] * 2 ** (1/(2*octava))  # Calcula frecuencia inferior
-            
-            if finf <= f[0]:
-                idxinf = 0
-            else:
-                idxinf = np.argmin(np.abs(f[:n+1] - finf))  # índice de la frecuencia inferior
-            
-            if fsup >= f[-1]:
-                idxsup = f.size - 1
-            else:
-                idxsup = np.argmin(np.abs(f[:] - fsup)) # índice de la frecuencia superior
-               
-            temp = 10 ** (0.1 * amp[idxinf:idxsup+1])   # Suma las presiones en la banda
-            ampsmooth[n] = 10 * np.log10(sum(temp) / len(amp[idxinf:idxsup+1])) # Promedio ponderado
-    return ampsmooth
-
-def butter_pasabanda(N, flow, fhigh, fs):
-    '''Devuelve los coeficientes sos de un filtro butterworth pasabanda.'''
-    # Se normaliza la frecuencia en [0, pi]
+    # The frequency is normalize in [0, pi]
     wlow = flow / (0.5 * fs)
     whigh = fhigh / (0.5 * fs)
     return sig.butter(N, [wlow, whigh], 'bandpass', output='sos')
 
-def butter_pasabajos(N, fc, fs):
-    wc = fc / (0.5 * fs)
-    return sig.butter(N, wc, 'low', output='sos')
 
-def butter_pasaaltos(N, fc, fs):
-    wc = fc / (0.5 * fs)
-    return sig.butter(N, wc, 'high', output='sos')
-
-def filtro_pasabanda(señal, flow, fhigh, fs, N=5, filtfilt=False):
-    '''
-    Aplica un filtro pasabanda tipo 'sos'.
-
+def bandpass_filter(signal, flow, fhigh, fs, N=5, filtfilt=False):
+    """
+    Applies a 'sos' bandpass filter.
     Parameters
     ----------
-    señal : array 1-D
-        señal a filtrar.
-    flow : int o float
-        Frecuencia de corte inferior.
-    fhigh : int o float
-        Frecuencia de corte superior.
+    signal : 1-D array
+        Signal to be filtered.
+    flow : int or float
+        Lower cutoff frequency.
+    fhigh : int or float
+        Upper cutoff frequency.
     fs : int
-        Frecuencia de muestreo de señal.
+        Signal sampling frequency.
     N : int, optional
-        Orden del filtro. The default is 5.
+        Filter order. Default is 5.
 
     Returns
     -------
-    y : 1darray
-        señal filtrada.
+    y : 1-D array
+    Filtered signal.
+    """
 
-    '''
-    sos = butter_pasabanda(N, flow, fhigh, fs)
+    sos = butter_bandpass(N, flow, fhigh, fs)
     if filtfilt:
-        y = sig.sosfiltfilt(sos, señal)
+        y = sig.sosfiltfilt(sos, signal)
     else: 
-        y = sig.sosfilt(sos, señal)
+        y = sig.sosfilt(sos, signal)
     return y
 
-def parametro_banda(parametro, señal, fs, flow, fhigh, N=5):
-    '''
-    Función de alto orden que calcula un parámetro en la banda requerida.
-
-    Parameters
-    ----------
-    parametro : function
-        Función a calcular.
-    señal : numpy array
-        Señal a procesar.
-    fs : int
-        Frecuencia de muestreo.
-    flow : float, int
-        Frecuencia de corte inferior de la banda.
-    fhigh : float, int
-        Frecuencia de corte superior de la banda..
-    N : int, optional
-        Orden del filtro. The default is 5.
-
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
-
-    '''
-    señal_filt = filtro_pasabanda(señal, flow, fhigh, fs, N)
-    return parametro(señal_filt, fs)
-
-def octavas(f0=31.5, normalized=True):
-    '''
-    Devuelve las frecuencias centrales por bandas de octava.
+def octaves(f0=31.5, normalized=True):
+    """
+    Returns the central frequencies for octave bands.
 
     Parameters
     ----------
     f0 : float, optional
-        frecuencia central de la banda inferior en Hz. The default is 31.5.
+        Central frequency of the lower band in Hz. Default is 31.5.
 
     Returns
     -------
     list
-        frecuencias centrales de bandas de octava
-
-    '''
+    Central frequencies of octave bands.
+    """
     if normalized:
         center = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
         return center
     else:
         return [round(f0 * 2 ** i, 1) for i in range(0, 10)]
 
-def tercios(f0=25, normalized=True):
-    '''
-    Devuelve las frecuencias centrales por tercios de octava.
+def thirds(f0=25, normalized=True):
+    """
+    Returns the central frequencies for one-third octave bands. 
 
     Parameters
     ----------
     f0 : float, optional
-        frecuencia central de la banda inferior en Hz. The default is 25.
+        Central frequency of the lower band in Hz. Default is 25.
 
     Returns
     -------
     list
-        frecuencias centrales de tercio de octava
+    Central frequencies of one-third octave bands.
+    """
 
-    '''
     if normalized:
         center = [25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 
                   500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 
@@ -747,108 +292,71 @@ def tercios(f0=25, normalized=True):
     else:
         return [round(f0 * 2 ** (i/3), 1) for i in range(0, 29)]
 
-def H_tercios(frecs):
-    salida = []
-    for i in range(len(frecs)):
-        finf = 2 ** (-1/6) * frecs[i]
-        fsup = 2 ** (1/6) * frecs[i]
-        sos = butter_pasabanda(5, finf, fsup, fs=44100)
-        w, h = sig.sosfreqz(sos, worN=16384, fs=44100)
-        salida.append(np.abs(h))
-    return salida, w
 
-def calcula_parametro(param, imp, fs, filtro='tercios', N=5):
-    '''
-    Calcula el parámetro 'param' para una señal por octavas o tercios
-    de octava.
+def calc_parameter(param, imp, fs, filter='thirds', N=5):
+    """
+    Calculates the 'param' parameter for a signal in octave or one-third octave bands.
 
     Parameters
     ----------
     param : function
-        función que calcula el parámetro. Debe ser del tipo f(x, fs).
-    imp : 1darray
-        señal a procesar. Típicamente una respuesta al impulso.
+        Function that calculates the parameter. It should be of the form f(x, fs).
+    imp : 1-D array
+        Signal to process. Typically an impulse response.
     fs : int
-        Frecuencia de muestreo de imp.
-    filtro : str, optional
-        Tipo de filtro a aplicar. Si filtro='octavas', calcula por octavas, 
-        si es 'tercios', por tercios. The default is 'tercios'.
+        Sampling frequency of imp.
+    filter : str, optional
+        Type of filter to apply. If filter='octaves', calculates for octave bands,
+        if it is 'thirds', calculates for one-third octave bands. Default is 'thirds'.
 
     Returns
     -------
-    salida : list
-        lista con los parámetros calculados para cada banda.
-
-    '''
-    if filtro == 'tercios':
-        salida = []
-        frecs = tercios()
+    output : list
+    List with the calculated parameters for each band.
+    """
+    
+    if filter == 'thirds':
+        output = []
+        frecs = thirds()
         for i in range(len(frecs)):
             finf = 2 ** (-1/6) * frecs[i]
             fsup = 2 ** (1/6) * frecs[i]
-            impfilt = filtro_pasabanda(imp, finf, fsup, fs, N)
-            salida.append(param(impfilt, fs))
-        return salida
-    elif filtro == 'octavas' :
-        salida = []
-        frecs = octavas()
+            impfilt = bandpass_filter(imp, finf, fsup, fs, N)
+            output.append(param(impfilt, fs))
+        return output
+    elif filter == 'octaves' :
+        output = []
+        frecs = octaves()
         for i in range(len(frecs)):
             finf = 2 ** (-1/2) * frecs[i]
             fsup = 2 ** (1/2) * frecs[i]
-            impfilt = filtro_pasabanda(imp, finf, fsup, fs, N)
-            salida.append(param(impfilt, fs))
-        return salida
+            impfilt = bandpass_filter(imp, finf, fsup, fs, N)
+            output.append(param(impfilt, fs))
+        return output
 
-# =============================================================================
-# ANDA MEDIO COMO EL OJETE:
-# =============================================================================
-    
-def mediamovil(x,M):
+def maf_rcsv(x, M):
     """
-    Aplica un filtro de media móvil de manera recursiva sobre una señal.
-
-    Parámetros de entrada: 
-
-      x:             Señal discreta
-      M:             Ancho de ventana
-       
-    Parámetro de salida:
-      
-    suavizado:            Señal filtrada resultante
-    """
-    
-    suavizado = np.zeros(len(x)-M+1)    # Vector de salida
-    suavizado[0] = np.mean(x[0:M-1])    # Se calcula el primer elemento
-    for i in range(1,len(x)-M+1):     # Desde el segundo elemento hasta el último
-            suavizado[i] = suavizado[i-1] + (x[i+M-1] - x[i-1])/M   # Aplica la fórmula
-    delay = (len(x) - len(suavizado))//2    # Para completar el array de salida
-    # y que ambos tengan la misma dimensión para poder plotear y comparar.
-    suavizado = np.hstack([suavizado[0:delay], suavizado, suavizado[-delay-1:-1]])
-    return suavizado
-
-def mediamovil_rcsv(x, M):
-    '''
-    Implementación de una media movil recursiva. Arrastra error cuando se usa con
-    floats y no ints. 
+    Implementation of a recursive moving average filter. Has rounding error when used with
+    floats instead of ints.
 
     Parameters
     ----------
     x : array-like
-        Señal a filtrar.
+        Signal to be filtered.
     M : int
-        Tamaño de ventana.
+        Window size.
 
     Returns
     -------
-    y : 1d-array
-        Señal filtrada.
+    y : 1-D array
+    Filtered signal.
 
-    '''
+    """
     if type(M) != int:
-        M = int(M)      # tamaño de ventana
+        M = int(M)      # Window size
     if M >= len(x):
             raise IndexError('Window length greater than signal')
-    L = len(x) - M + 1  # cantidad de ventanas
+    L = len(x) - M + 1  # Amount of windows
     y = np.zeros(L)
     
     # Acc = np.sum(x[0:M-1])
@@ -861,186 +369,216 @@ def mediamovil_rcsv(x, M):
     y = np.hstack([y, y[L-M+1:]])
     return y
 
-# def mediamovil_rcsv(y, m):
-#     """medianf calculates de moving median average of "y" input signal over an "m" sized window.
-#     median_filter() function of the scipy library is implemented"""
-#     env = np.zeros_like(y)
-#     for i in range(len(y)):
-#         env[i] = median_filter(y[i], m)
-    # return env
 
 # =============================================================================
-# CONVERSION A dB    
+# CONVERSION TO dB    
 # =============================================================================
-    
-def a_Pascal(calibracion, señal):
-    '''
-    Obtiene una señal en Pascales a partir de una referencia.
-    
-    Con una señal de referencia 94 dB @ 1 kHz obtenida con un calibrador, 
-    es posible conocer la sensibilidad del sistema. A partir de ese valor se
-    obtiene la presión que representala amplitud de la señal desconocida.
+def nivel_bandas(data, f_c, freqs, octave, dB=True):
+    """
+    Calculates the signal level for bands of the required width.
 
     Parameters
     ----------
-    calibracion : str
-        Nombre del archivo de calibración. Es la referencia grabada a 94 dB
-        1 k Hz.
-    señal : str
-        Nombre del archivo de señal desconocida..
-
-    Returns
-    -------
-    señal_Pa : array
-        Señal en pascales.
-    sensibilidad : float
-        Sensibilidad del sistema.
-
-    '''
-    cal, fs1 = sf.read(calibracion)
-    señal, fs2 = sf.read(señal)
-    sensibilidad = rms(cal)    # eV / Pa
-    señal_Pa = señal / sensibilidad     # Pa
-    
-    return señal_Pa, fs2, sensibilidad
-
-def a_dBSPL(señal, fs):
-    '''
-    Convierte una señal de presión instantánea a nivel de presión (dB SPL)
-    con referencia 20e-6 Pa.
-
-    Parameters
-    ----------
-    señal : array
-        Señal a convertir. Debe estar en pascales.
-    fs : int
-        Frecuencia de sampleo.
-
-    Returns
-    -------
-    señal_dBSPL : TYPE
-        DESCRIPTION.
-
-    '''
-    señal_Pef = rms(señal)
-    señal_dBSPL = 20 * (np.log10(señal_Pef) - np.log10(2e-5))
-    return señal_dBSPL
-
-
-def nivel_bandas(datos, f_c, freqs, octava, dB=True):
-    '''
-    Calcula el nivel de señal por bandas del ancho requerido. 
-
-    Parameters
-    ----------
-    datos : array-type
-        Matriz con las señales a procesar en dB. axis=0 debe ser el eje 
-        frecuencial.
-    f_c : array-type
-        lista con las frecuencias centrales de las bandas de interés.
-    freqs : array-type
-        Eje frecuencial correspondiente a 'datos'.
-    octava : int
-        Ancho de banda. octava = 1, bandas de octava. octava = 3, tercios
-        de octava...        
+    data : array-like
+        Matrix with the signals to process in dB. axis=0 should be the
+        frequency axis.
+    f_c : array-like
+        List of central frequencies of the bands of interest.
+    freqs : array-like
+        Frequency axis corresponding to 'data'.
+    octave : int
+        Bandwidth. octave = 1 for octave bands, octave = 3 for one-third
+        octave bands, ...
 
     Returns
     -------
     numpy array
-        datos procesados con información para las bandas indicadas en f_c.
+    Processed data with information for the specified bands in f_c.
+    """
 
-    '''
-    bandas = []
+    bands = []
     for i in f_c:
-        fsup = i * 2 ** (1/(2*octava))
-        finf = i * 2 ** (-1/(2*octava))
+        fsup = i * 2 ** (1/(2*octave))
+        finf = i * 2 ** (-1/(2*octave))
         
         idxsup = np.argmin(abs(freqs- fsup))
         idxinf = np.argmin(abs(freqs- finf))
         
         if dB:
-            aux = 10 ** (0.1 * datos[idxinf:idxsup+1, :])
-            bandas.append(10*np.log10(aux.sum(axis=0)
-                                      /len(datos[idxinf:idxsup+1, 1])))
+            aux = 10 ** (0.1 * data[idxinf:idxsup+1, :])
+            bands.append(10*np.log10(aux.sum(axis=0)
+                                      /len(data[idxinf:idxsup+1, 1])))
         else:
             nivel = 20*np.log10(sum(
-                datos[idxinf:idxsup+1]/len(datos[idxinf:idxsup+1])))
+                data[idxinf:idxsup+1]/len(data[idxinf:idxsup+1])))
             
-            bandas.append(nivel)
-    return np.array(bandas)
+            bands.append(nivel)
+    return np.array(bands)
 
-def min_distinto_cero(x):
-    minimo = 1
+def min_nonzero(x):
+
+    """
+    Returns the minimum non-zero value in the array.
+
+    Parameters
+    ----------
+    x : array-like
+        Array from which to find the minimum non-zero value.
+
+    Returns
+    -------
+    float or int
+        Minimum non-zero value found in the array.
+    """
+    min = 1
     for i in range(x.size):
-        if x[i] < minimo and x[i] != 0:
-            minimo = x[i]
-    return minimo
+        if x[i] < min and x[i] != 0:
+            min = x[i]
+    return min
 
-def min_distinto_cero2(x):
-    
+def min_nonzero2(x):
+    """
+    Replaces zero values in an array with the minimum non-zero value.
+
+    Parameters
+    ----------
+    x : array-like
+        Array in which to replace zero values.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array with zero values replaced by the minimum non-zero value.
+    """
     x = np.abs(x)
-    ceros = np.argwhere(x == 0)
-    nonceros = np.nonzero(x)[0]
+    zeros = np.argwhere(x == 0)
+    nonzeros = np.nonzero(x)[0]
     # idx = 0
-    if nonceros.size == 0:
+    if nonzeros.size == 0:
         return x
     else:
-        for i in ceros:
-            idx = np.argmin(np.abs(nonceros - i))
-            x[i] = x[nonceros[idx]]
+        for i in zeros:
+            idx = np.argmin(np.abs(nonzeros - i))
+            x[i] = x[nonzeros[idx]]
         return x
 
 def a_dBFS(x):
+    """
+    Converts an array of signal values to dBFS (decibels relative to full scale).
+
+    Parameters
+    ----------
+    x : array-like
+        Array of signal values.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of signal values converted to dBFS.
+    """
     x = np.abs(x)
-    minimo = min_distinto_cero(x)
+    min = min_nonzero(x)
     for i in range(x.size):
         if x[i] == 0:
-            x[i] = minimo
+            x[i] = min
     return 20 * np.log10(x)
 
-def a_dB2(x):
-    x = np.abs(x)
-    minimo = min_distinto_cero(x)
-    x = np.where(x == 0, minimo, x)
-    maximo = np.max(x)
-    return 20 * np.log10(x / maximo)
 
 def a_dB(x):
-    x = min_distinto_cero2(x)
-    maximo = np.max(x)
-    return 20 * np.log10(x / maximo)
+    """
+    Converts an array of signal values to dB (decibels) relative to the maximum value.
+
+    Parameters
+    ----------
+    x : array-like
+        Array of signal values.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of signal values converted to dB.
+    """
+    
+    x = min_nonzero2(x)
+    maximum = np.max(x)
+    return 20 * np.log10(x / maximum)
 # =============================================================================
-# DESCRIPTORES
+# DESCRIPTORS
 # =============================================================================
 
 ## RT
 def calc_RT20(smoothed_IR, fs):
-    # RT20 = 3 * (np.max(np.where(smoothed_IR > -25)) - np.max(np.where(smoothed_IR > -5))) / fs   # Calculate the RT20
+    """
+    Calculates the reverberation time (RT20) of a room impulse response.
+
+    Parameters
+    ----------
+    smoothed_IR : array-like
+        Smoothed room impulse response.
+    fs : int
+        Sampling frequency of the room impulse response.
+
+    Returns
+    -------
+    float
+        Reverberation time (RT20) in seconds.
+    """
+
     t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
     maxval = np.max(smoothed_IR)
     i_start = int(np.argwhere(smoothed_IR >= maxval -5)[-1])
     i_end = int(np.argwhere(smoothed_IR >= maxval -25)[-1])
-    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
+    p = least_squares(t[i_start:i_end], smoothed_IR[i_start:i_end])
     
     return round(-60 / p[0], 3)
 
 def calc_RT30(smoothed_IR, fs):
-    # RT30 = 2 * (np.max(np.where(smoothed_IR > -35)) - np.max(np.where(smoothed_IR > -5))) / fs   # Calculate the RT30
+    """
+    Calculates the reverberation time (RT30) of a room impulse response.
+
+    Parameters
+    ----------
+    smoothed_IR : array-like
+        Smoothed room impulse response.
+    fs : int
+        Sampling frequency of the room impulse response.
+
+    Returns
+    -------
+    float
+        Reverberation time (RT30) in seconds
+    """
     t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
     maxval = np.max(smoothed_IR)
     i_start = int(np.argwhere(smoothed_IR >= maxval -5)[-1])
     i_end = int(np.argwhere(smoothed_IR >= maxval -35)[-1])
-    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
+    p = least_squares(t[i_start:i_end], smoothed_IR[i_start:i_end])
     
     return round(-60 / p[0], 3)
     
 
 def calc_EDT(smoothed_IR, fs):
+    """
+    Calculates the early decay time (EDT) of a room impulse response.
+
+    Parameters
+    ----------
+    smoothed_IR : array-like
+        Smoothed room impulse response.
+    fs : int
+        Sampling frequency of the room impulse response.
+
+    Returns
+    -------
+    float
+        Early decay time (EDT) in seconds
+    """
+
     t = np.arange(0, len(smoothed_IR)/fs, 1/fs)
     maxval = np.max(smoothed_IR)
     i_start = int(np.argwhere(smoothed_IR >= maxval -1)[-1])
     i_end = int(np.argwhere(smoothed_IR >= maxval -10)[-1])
-    p = cuad_min(t[i_start:i_end], smoothed_IR[i_start:i_end])
+    p = least_squares(t[i_start:i_end], smoothed_IR[i_start:i_end])
 
     return round(-60 / p[0], 3)
     
@@ -1048,6 +586,22 @@ def calc_EDT(smoothed_IR, fs):
 ## Clarity
 
 def calc_C50(IR, fs):
+    """
+    Calculates the clarity index C50 of a room impulse response.
+
+    Parameters
+    ----------
+    IR : array-like
+        Room impulse response.
+    fs : int
+        Sampling frequency of the room impulse response.
+
+    Returns
+    -------
+    float
+        Clarity index C50 in decibels (dB).
+    """
+
     t50 = int(0.05 * fs)
     IR = IR ** 2 # Raise the IR to the second power
     C50 = 10 * np.log10(np.cumsum(IR[:t50])  / np.cumsum(IR[t50:])) # Calculate the C50
@@ -1055,6 +609,21 @@ def calc_C50(IR, fs):
     return round(C50, 3)
 
 def calc_C80(IR, fs):
+    """
+    Calculates the clarity index C80 of a room impulse response.
+
+    Parameters
+    ----------
+    IR : array-like
+        Room impulse response.
+    fs : int
+        Sampling frequency of the room impulse response.
+
+    Returns
+    -------
+    float
+        Clarity index C80 in decibels (dB).
+    """
     t80 = int(0.08 * fs)
     C80 = 10 * np.log10(np.cumsum(IR[:t80])  / np.cumsum(IR[t80:])) # Calculate the C80
     
@@ -1071,27 +640,46 @@ def c_parameters(filtered_IR, fs):
 ## Tt & EDTt
 
 def idx_Tt(filtered_IR):
-    '''
-    Calcula el índice (muestra) para el Transition Time
+    """
+    Calculates the Transition Time index for a filtered impulse response.
 
     Parameters
     ----------
-    filtered_IR : array
-        Impulso filtrado en banda.
+    filtered_IR : array-like
+        Filtered impulse response.
 
     Returns
     -------
-    index : int
-
-    '''
-    # Tt = np.max(np.where(np.cumsum(filtered_IR) <= 0.99 * np.max(np.sum(filtered_IR))))
+    int
+        Transition Time index.
+    """
     
     index = np.argmin(np.cumsum(filtered_IR**2) <= 0.99 * np.sum(filtered_IR**2))
     return index
 
 def calc_EDTt(filtered_IR, smoothed_IR, fs):
+    """
+    Calculates the Early Decay Time (EDT) and Transition Time (Tt) for a filtered impulse response.
+
+    Parameters
+    ----------
+    filtered_IR : array-like
+        Filtered impulse response.
+    smoothed_IR : array-like
+        Smoothed impulse response.
+    fs : int or float
+        Sampling frequency of the impulse response.
+
+    Returns
+    -------
+    EDTt : float
+        Early Decay Time (EDT) in seconds.
+    Tt : float
+        Transition Time (Tt) in seconds.
+
+    """
     
-    index = idx_Tt(filtered_IR) # Transition Time
+    index = idx_Tt(filtered_IR) # Transition Time index
     Tt = index / fs
     
     peak_idx = np.argmax(filtered_IR)
@@ -1100,13 +688,32 @@ def calc_EDTt(filtered_IR, smoothed_IR, fs):
     
     t = np.arange(0, N/fs, 1/fs)
     
-    p = cuad_min(t[peak_idx : index], smoothed_IR[peak_idx : index])
+    p = least_squares(t[peak_idx : index], smoothed_IR[peak_idx : index])
     
     EDTt = -60 / p[0]
     
     return round(EDTt, 3), round(Tt, 3)
 
 def calc_IACC_early(IR_L, IR_R, fs):
+
+    """
+    Calculates the early interaural cross-correlation (IACC) for a stereo impulse response.
+
+    Parameters
+    ----------
+    IR_L : array-like
+        Impulse response of the left channel.
+    IR_R : array-like
+        Impulse response of the right channel.
+    fs : int or float
+        Sampling frequency of the impulse response.
+
+    Returns
+    -------
+    IACC_early : float
+        Early interaural cross-correlation (IACC) value.
+
+    """
     
     num = np.correlate(IR_L[0:int(0.8 * fs)], IR_R[0:int(0.08 * fs)])
     den = np.sqrt(np.sum(IR_L[0:int(0.8 * fs)] ** 2) * (np.sum(IR_R[0:int(0.8 * fs)] ** 2)))
