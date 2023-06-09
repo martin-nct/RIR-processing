@@ -26,6 +26,6 @@ To execute the application run `gui.py` file. The settings interface will show u
 6. Select a cell in a frequency band column to display the corresponding curves. Save the image with "Save Graph".
 7. The red columns (if any) displays the bands in which results may not be valid. Save the table to `.csv` with "Save Data". 
 
-![Results display](/images/ResultsUI.png)
+![Results display](/images/ResultUI.png)
 
 Written Report avaiable at ...
