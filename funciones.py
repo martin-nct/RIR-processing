@@ -715,8 +715,8 @@ def calc_IACC_early(IR_L, IR_R, fs):
 
     """
     
-    num = np.correlate(IR_L[0:int(0.8 * fs)], IR_R[0:int(0.08 * fs)])
-    den = np.sqrt(np.sum(IR_L[0:int(0.8 * fs)] ** 2) * (np.sum(IR_R[0:int(0.8 * fs)] ** 2)))
+    num = np.correlate(IR_L[0:int(0.08 * fs)], IR_R[0:int(0.08 * fs)], mode='full')
+    den = np.sqrt(np.sum(IR_L[0:int(0.08 * fs)] ** 2) * (np.sum(IR_R[0:int(0.08 * fs)] ** 2)))
     IACC_early = np.max(np.abs(num / den)) # Normalizad IACC_early
     
     return round(IACC_early, 3)

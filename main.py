@@ -24,9 +24,9 @@ class Room_IR():
         
         self.sweep, self.fs = sf.read(file)
         
-    def IR_from_ss(self, f0, f1, T, fs):
+    def IR_from_ss(self, rec, f0, f1, T, fs):
 
-        l = len(self.rec) # Lenght of the IR
+        l = len(rec) # Lenght of the IR
 
         # Generate logarithmic sine sweep
         t = np.linspace(start=0, stop=T, num=int(T * fs), endpoint=False)   # Time vector
@@ -41,12 +41,12 @@ class Room_IR():
         inv_filt = np.pad(array=inv_filt, pad_width=(0, int(l - T * fs)), mode="constant") # Zero padding
         
         # Processing in frequency domain
-        signal_fft = np.fft.rfft(self.rec)
+        signal_fft = np.fft.rfft(rec)
         inv_filt_fft = np.fft.rfft(inv_filt)
         
         IR_fft = signal_fft * inv_filt_fft  # Obtain the FFT of the impulse response
         IR = np.fft.irfft(IR_fft)           # Inverse FFT to recover the temporary IR
-        self.IR = IR / np.max(np.abs(IR))
+        return IR / np.max(np.abs(IR))
         
     def get_valid_bands(self, filter):
         
@@ -136,32 +136,44 @@ class Room_IR():
     def load_recording(self, file):
         
         self.rec, self.fs_rec = sf.read(file)
+        if self.rec.ndim > 1:
+            self.is_binaural = True
+            self.rec_L = self.rec[:, 0] # Left channel of the IR
+            self.rec_R = self.rec[:, 1] # Right channel of the IR
+            self.rec = self.rec_L
+            
         
-    def linear_convolve(self):
+    def linear_convolve(self, rec):
         
         if self.fs == self.fs_rec:
             
-            self.IR = signal.convolve(self.inverse_filter, self.rec, method='fft')
+            IR = signal.convolve(self.inverse_filter, rec, method='fft')
             
-            self.IR /= max(abs(self.IR))
+            IR /= max(abs(IR))
             
             # Convert to dB
-            self.IR_dB = funciones.a_dBFS(self.IR)
+            # self.IR_dB = funciones.a_dBFS(self.IR)
+            
+            return IR
 
-    def IR_trim(self, T_end=None):
+    def IR_trim(self, IR, T_end=None):
         # The start of the impulse is found and the previous samples are discarded.
         if T_end is None:
             T_end = 5 # segs
+        length = int(T_end * self.fs)
             
-        N_start = np.argmax(np.abs(self.IR))
-        N_correc = np.argwhere(np.abs(self.IR)>=0.1) # -20 dB 
+        N_start = np.argmax(np.abs(IR))
+        N_correc = np.argwhere(np.abs(IR)>=0.1) # -20 dB 
         delta = N_start - N_correc[0]
         while delta > 200:          # The start is within 200 samples from the maximum.
             N_correc = N_correc[1:]
             delta = N_start - N_correc[0]
         N_correc = int(N_correc[0])
-        N_end = N_correc + int(T_end * self.fs)
-        self.IR = self.IR[N_correc:N_end]
+        IR = IR[N_correc:]
+        if IR.size > length:
+            IR = IR[:length]
+        
+        return IR
 
     def load_extIR(self, file):
         self.IR, self.fs = sf.read(file)
@@ -268,9 +280,9 @@ class Room_IR():
             it +=1
             
             
-        C = max(self.IR) * 10 ** (p[1] / 10) * np.exp(p[0]/10/np.log10(np.exp(1))*i_c2) / (
+        C = max(impfilt) * 10 ** (p[1] / 10) * np.exp(p[0]/10/np.log10(np.exp(1))*i_c2) / (
             -p[0] / 10 / np.log10(np.exp(1)))
-        
+        # C = 0
         return C, i_c2
 
     def schroeder_int(self, IR, N_c, C):
@@ -361,7 +373,7 @@ class Room_IR():
                 salida.append(param(impfilt, fs, frecs[i]))
             return salida
         
-    def acoustical_parameters (self, smoothed_IR, filtered_IR):
+    def acoustical_parameters (self, smoothed_IR, filtered_IR, IR_R = None):
 
           # Dictionary to store the parameters
           d = {"RT20":"",
@@ -379,26 +391,48 @@ class Room_IR():
           d["C50"], d["C80"] = funciones.c_parameters(filtered_IR, self.fs)
           d["EDTt"], d['Tt'] = funciones.calc_EDTt(filtered_IR, smoothed_IR, self.fs)
           if self.is_binaural:
-              d["IACCEARLY"] = funciones.calc_IACC_early(self.IR_L, self.IR_R, self.fs)
+              d["IACCEARLY"] = funciones.calc_IACC_early(filtered_IR, IR_R, self.fs)
           return d
           
     def get_acparam(self, ETC):
         
-        results = []
-        mmfilt = []
-        
-        if self.method == 0:
-            schr = []
-            for i in range(len(ETC)):
-                schr.append(ETC[i][0])
-                mmfilt.append(ETC[i][1])
-                results.append(self.acoustical_parameters(schr[i], ETC[i][2]))
+        if self.is_binaural:
+            ETC_L = ETC[0]
+            ETC_R = ETC[1]
             
-        
-        elif self.method == 1:
-            for i in range(len(ETC)):
-                mmfilt.append(ETC[i][0])
-                results.append(self.acoustical_parameters(ETC[i][0], ETC[i][1]))
-            schr = None
-        
+            results = []
+            mmfilt = []
+            
+            if self.method == 0:
+                schr = []
+                for i in range(len(ETC_L)):
+                    schr.append(ETC_L[i][0])
+                    mmfilt.append(ETC_L[i][1])
+                    results.append(self.acoustical_parameters(schr[i], ETC_L[i][2], ETC_R[i][2]))
+                
+            
+            elif self.method == 1:
+                for i in range(len(ETC_L)):
+                    mmfilt.append(ETC_L[i][0])
+                    results.append(self.acoustical_parameters(ETC_L[i][0], ETC_L[i][1], ETC_R[i][1]))
+                schr = None
+        else:
+                
+            results = []
+            mmfilt = []
+            
+            if self.method == 0:
+                schr = []
+                for i in range(len(ETC)):
+                    schr.append(ETC[i][0])
+                    mmfilt.append(ETC[i][1])
+                    results.append(self.acoustical_parameters(schr[i], ETC[i][2]))
+                
+            
+            elif self.method == 1:
+                for i in range(len(ETC)):
+                    mmfilt.append(ETC[i][0])
+                    results.append(self.acoustical_parameters(ETC[i][0], ETC[i][1]))
+                schr = None
+            
         return results, schr, mmfilt

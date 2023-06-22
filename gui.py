@@ -191,6 +191,7 @@ class SetUpWindow(QWidget, Room_IR):
                 self.valid_freqs = funciones.octaves()
             elif filter == 1:
                 self.valid_freqs = funciones.thirds()
+            
         
         else:
 
@@ -200,17 +201,37 @@ class SetUpWindow(QWidget, Room_IR):
                 self.fend = float(self.fmax.text())
                 self.time = float(self.time.text())
                 self.fs = int(self.fs.text())
-                self.IR_from_ss(self.fstart, self.fend, self.time, self.fs)
+                if self.is_binaural:
+                    self.IR_L = self.IR_from_ss(self.rec_L, self.fstart, 
+                                                self.fend, self.time, self.fs)
+                    self.IR_R = self.IR_from_ss(self.rec_R, self.fstart, 
+                                                self.fend, self.time, self.fs)
+                else:
+                    self.IR = self.IR_from_ss(self.rec, self.fstart, 
+                                                self.fend, self.time, self.fs)
            
             else:
                 self.get_inverse_filt()
-                self.linear_convolve()
+                if self.is_binaural:
+                    self.IR_L = self.linear_convolve(self.rec_L)
+                    self.IR_R = self.linear_convolve(self.rec_R)
+                else:
+                    self.IR = self.linear_convolve(self.rec)
+            
             
             self.get_valid_bands(filter)
         
-        self.IR_trim()
+        if self.is_binaural:
+            self.IR_L = self.IR_trim(self.IR_L)
+            self.IR_R = self.IR_trim(self.IR_R)
             
-        ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filter)
+            ETC_L = self.calcula_ETC(self.get_ETC, self.IR_L, self.fs, filter)
+            ETC_R = self.calcula_ETC(self.get_ETC, self.IR_R, self.fs, filter)
+            ETC = [ETC_L, ETC_R]
+            
+        else:
+            self.IR = self.IR_trim(self.IR)
+            ETC = self.calcula_ETC(self.get_ETC, self.IR, self.fs, filter)
         
         self.results, self.schroeder, self.mmfilt = self.get_acparam(ETC)
         
@@ -236,6 +257,10 @@ class SetUpWindow(QWidget, Room_IR):
                 self.load_extIR(ruta)
             else:
                 self.rec, self.fs_rec = sf.read(ruta)
+                if self.rec.ndim > 1:
+                    self.is_binaural = True
+                    self.rec_L = self.rec[:, 0] # Left channel of the rec
+                    self.rec_R = self.rec[:, 1] # Right channel of the rec
 
 
 class ResultWindow(QWidget):
